@@ -36,7 +36,7 @@ export default function AdminApp() {
   const loadCatalog = async () => {
     setLoadError('');
     const res = await fetchAdminCatalog(pin);
-    if (res.ok) setItems(res.items);
+    if (res.ok) setItems(Array.isArray(res.items) ? res.items : []);
     else setLoadError(res.error || 'No se pudo cargar el catálogo.');
   };
 
@@ -57,9 +57,9 @@ export default function AdminApp() {
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 2500); };
 
-  const updateItem = (idx, patch) => setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
+  const updateItem = (idx, patch) => setItems((prev) => (prev || []).map((it, i) => (i === idx ? { ...it, ...patch } : it)));
 
-  const addNew = (category) => setItems((prev) => [{ ...emptyItem(), category }, ...prev]);
+  const addNew = (category) => setItems((prev) => [{ ...emptyItem(), category }, ...(prev || [])]);
 
   const remove = async (idx) => {
     const item = items[idx];

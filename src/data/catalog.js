@@ -39,6 +39,6 @@ export const DELIVERY_FEE_CIUDAD = 150;
 export const CONTACT = {
   instagram: 'cokoabychefmanurossi',
   location: 'Bávaro, Punta Cana 🇩🇴',
-  phoneDisplay: '+1 (809) 000-0000',
-  phoneHref: 'tel:+18090000000',
+  phoneDisplay: '+1 (829) 983-3543',
+  phoneHref: 'tel:+18299833543',
 };

@@ -160,7 +160,7 @@ export default function CartDrawer({ open, onClose, cart, changeQty, resetCart }
             <input id="cw-name" className="field-input" value={form.name} onChange={setField('name')} placeholder="Tu nombre" />
 
             <label className="field-label" htmlFor="cw-phone">WhatsApp / Teléfono</label>
-            <input id="cw-phone" className="field-input" value={form.phone} onChange={setField('phone')} placeholder="+1 (809) 000-0000" />
+            <input id="cw-phone" className="field-input" value={form.phone} onChange={setField('phone')} placeholder="+1 (829) 983-3543" />
 
             <label className="field-label" htmlFor="cw-email">Email (recibe tu confirmación)</label>
             <input id="cw-email" className="field-input" type="email" value={form.email} onChange={setField('email')} placeholder="tucorreo@ejemplo.com" />

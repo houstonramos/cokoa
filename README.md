@@ -41,6 +41,11 @@ En el editor de Apps Script, selecciona la función **`testPedido`** en el despl
 - Apareció la pestaña "Pedidos" con una fila `CW-1001`.
 - Llegó el correo de alerta a `BUSINESS_EMAIL`.
 
+Antes de probar la subida de fotos, ejecuta también la función **`authorizeServices`** desde
+el editor y acepta el permiso de Google Drive. La aplicación web debe estar publicada con
+**Ejecutar como: Yo** (la cuenta dueña del Sheet); si se publica como "usuario que accede",
+un visitante anónimo no tendrá permiso para usar DriveApp.
+
 Borra la fila de prueba cuando quieras.
 
 ## Paso 2 — Publicar como Web App

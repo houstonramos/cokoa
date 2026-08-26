@@ -398,3 +398,14 @@ function testPedido() {
   const result = doPost(fake);
   Logger.log(result.getContent());
 }
+
+/**
+ * Autorizacion inicial: ejecuta esta funcion una vez desde el editor de Apps
+ * Script y acepta los permisos de Sheets, Drive y correo antes de publicar.
+ */
+function authorizeServices() {
+  SpreadsheetApp.getActiveSpreadsheet().getName();
+  DriveApp.getRootFolder().getName();
+  MailApp.getRemainingDailyQuota();
+  Logger.log('Servicios autorizados correctamente.');
+}

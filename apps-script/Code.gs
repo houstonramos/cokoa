@@ -405,7 +405,7 @@ function testPedido() {
  */
 function authorizeServices() {
   SpreadsheetApp.getActiveSpreadsheet().getName();
-  DriveApp.getRootFolder().getName();
+  getOrCreatePhotosFolder_().getName();
   MailApp.getRemainingDailyQuota();
   Logger.log('Servicios autorizados correctamente.');
 }

@@ -35,14 +35,14 @@ export function normalizeDriveImageUrl(value, width = 960) {
   const input = String(value || '').trim();
   if (!input) return '';
   const id = driveImageId(input);
-  return id ? `https://lh3.googleusercontent.com/d/${encodeURIComponent(id)}=w${width}` : input;
+  return id ? `https://lh3.googleusercontent.com/d/${encodeURIComponent(id)}=w${width}-rw` : input;
 }
 
 export function driveImageSrcSet(value) {
   const id = driveImageId(value);
   if (!id) return undefined;
   return DRIVE_IMAGE_WIDTHS
-    .map((width) => `https://lh3.googleusercontent.com/d/${encodeURIComponent(id)}=w${width} ${width}w`)
+    .map((width) => `https://lh3.googleusercontent.com/d/${encodeURIComponent(id)}=w${width}-rw ${width}w`)
     .join(', ');
 }
 

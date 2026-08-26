@@ -2,6 +2,27 @@ import { PRODUCTS as STATIC_PRODUCTS, BOXES as STATIC_BOXES, EXPERIENCES as STAT
 
 const ENDPOINT = import.meta.env.VITE_ORDERS_ENDPOINT || '';
 
+/** Usa la variante de Drive diseñada para incrustar imágenes en sitios externos. */
+export function normalizeDriveImageUrl(value) {
+  const input = String(value || '').trim();
+  if (!input) return '';
+
+  try {
+    const url = new URL(input);
+    const isDriveHost = url.hostname === 'drive.google.com'
+      || url.hostname === 'drive.usercontent.google.com'
+      || url.hostname.endsWith('.googleusercontent.com');
+    if (!isDriveHost) return input;
+
+    const queryId = url.searchParams.get('id');
+    const pathMatch = url.pathname.match(/\/d\/([a-zA-Z0-9_-]{10,})/);
+    const id = queryId || (pathMatch && pathMatch[1]);
+    return id ? `https://drive.google.com/thumbnail?id=${encodeURIComponent(id)}&sz=w1200` : input;
+  } catch {
+    return input;
+  }
+}
+
 /**
  * Trae el catálogo en vivo desde la hoja "Catálogo" (el panel de control de Manu).
  * Si el Apps Script no está configurado, falla, o tarda demasiado, el sitio sigue
@@ -29,7 +50,7 @@ export async function fetchCatalog() {
         desc: item.desc,
         price: item.price,
         unit: item.unit,
-        image: item.image || '',
+        image: normalizeDriveImageUrl(item.image || ''),
       };
       const cat = (item.category || '').toLowerCase();
       if (cat.startsWith('caja')) boxes.push(mapped);

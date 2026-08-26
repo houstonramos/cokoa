@@ -88,14 +88,37 @@ export default function AdminApp() {
 
   const onImagePick = async (idx, file) => {
     if (!file) return;
+    const itemBeforeUpload = items[idx];
     updateItem(idx, { uploading: true });
-    const res = await uploadImage(pin, file);
-    if (res.ok) {
+    try {
+      const res = await uploadImage(pin, file);
+      if (!res.ok) {
+        updateItem(idx, { uploading: false });
+        showToast('No se pudo subir la foto: ' + (res.error || 'intenta de nuevo'));
+        return;
+      }
+
+      const itemWithImage = { ...itemBeforeUpload, image: res.url, rawImage: res.url, uploading: false };
       updateItem(idx, { image: res.url, rawImage: res.url, uploading: false });
-      showToast('Foto subida ✓ — no olvides Guardar.');
-    } else {
+
+      // Persist the photo immediately when the card has enough data to be saved.
+      if (itemBeforeUpload.name && itemBeforeUpload.name.trim() && itemBeforeUpload.price) {
+        setSavingId(idx);
+        const saveRes = await saveItem(pin, itemWithImage);
+        setSavingId(null);
+        if (saveRes.ok) {
+          updateItem(idx, { id: saveRes.id });
+          showToast('Foto subida y guardada ✓');
+          return;
+        }
+        showToast('Foto subida, pero no se pudo guardar: ' + (saveRes.error || 'pulsa Guardar'));
+        return;
+      }
+
+      showToast('Foto subida ✓ — completa nombre y precio, luego pulsa Guardar.');
+    } catch (err) {
       updateItem(idx, { uploading: false });
-      showToast('No se pudo subir la foto: ' + (res.error || ''));
+      showToast('No se pudo subir la foto: ' + (err && err.message ? err.message : 'intenta de nuevo'));
     }
   };
 

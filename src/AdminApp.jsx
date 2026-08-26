@@ -238,7 +238,11 @@ function ImagePicker({ onPick }) {
         type="file"
         accept="image/*"
         style={{ display: 'none' }}
-        onChange={(e) => onPick(e.target.files && e.target.files[0])}
+        onChange={(e) => {
+          const file = e.target.files && e.target.files[0];
+          e.target.value = '';
+          onPick(file);
+        }}
       />
     </>
   );

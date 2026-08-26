@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { getSavedPin, savePin, clearPin, login, fetchAdminCatalog, saveItem, deleteItem, uploadImage } from './lib/admin';
+import { normalizeDriveImageUrl } from './lib/catalog';
 
 const CATEGORIES = ['Postre', 'Caja', 'Experiencia'];
 const emptyItem = () => ({ id: '', category: 'Postre', name: '', desc: '', price: '', unit: 'lata 300ml', image: '', rawImage: '', active: true });
@@ -98,8 +99,9 @@ export default function AdminApp() {
         return;
       }
 
-      const itemWithImage = { ...itemBeforeUpload, image: res.url, rawImage: res.url, uploading: false };
-      updateItem(idx, { image: res.url, rawImage: res.url, uploading: false });
+      const displayUrl = normalizeDriveImageUrl(res.url);
+      const itemWithImage = { ...itemBeforeUpload, image: displayUrl, rawImage: displayUrl, uploading: false };
+      updateItem(idx, { image: displayUrl, rawImage: displayUrl, uploading: false });
 
       // Persist the photo immediately when the card has enough data to be saved.
       if (itemBeforeUpload.name && itemBeforeUpload.name.trim() && itemBeforeUpload.price) {
@@ -175,7 +177,7 @@ export default function AdminApp() {
           {items && items.map((item, idx) => (
             <div className={'admin-card' + (item.active === false ? ' admin-card-inactive' : '')} key={idx}>
               <div className="admin-card-photo">
-                {item.image ? <img src={item.image} alt={item.name} /> : <div className="admin-photo-empty">Sin foto</div>}
+                {item.image ? <img src={normalizeDriveImageUrl(item.image)} alt={item.name} /> : <div className="admin-photo-empty">Sin foto</div>}
                 {item.uploading && <div className="admin-photo-uploading">Subiendo…</div>}
                 <ImagePicker onPick={(file) => onImagePick(idx, file)} />
               </div>

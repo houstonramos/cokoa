@@ -177,7 +177,11 @@ export default function AdminApp() {
           {items && items.map((item, idx) => (
             <div className={'admin-card' + (item.active === false ? ' admin-card-inactive' : '')} key={idx}>
               <div className="admin-card-photo">
-                {item.image ? <img src={normalizeDriveImageUrl(item.image)} alt={item.name} /> : <div className="admin-photo-empty">Sin foto</div>}
+                {item.image ? (
+                  <img src={normalizeDriveImageUrl(item.image)} alt={item.name} loading="lazy" decoding="async" />
+                ) : (
+                  <div className="admin-photo-empty">Sin foto</div>
+                )}
                 {item.uploading && <div className="admin-photo-uploading">Subiendo…</div>}
                 <ImagePicker onPick={(file) => onImagePick(idx, file)} />
               </div>

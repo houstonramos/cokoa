@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { PRODUCTS, BOXES, EXPERIENCES, CONTACT } from './data/catalog';
-import { fetchCatalog } from './lib/catalog';
+import { CONTACT } from './data/catalog';
+import { driveImageSrcSet, fetchCatalog, getInitialCatalog } from './lib/catalog';
 import { fmt } from './lib/order';
 import CartDrawer from './components/CartDrawer';
 
@@ -9,7 +9,7 @@ export default function App() {
   const [open, setOpen] = useState(false);
   // Arranca con el catálogo de respaldo (nunca hay pantalla vacía) y lo reemplaza
   // en cuanto llega el catálogo en vivo desde la hoja "Catálogo" (el panel de Manu).
-  const [catalog, setCatalog] = useState({ products: PRODUCTS, boxes: BOXES, experiences: EXPERIENCES });
+  const [catalog, setCatalog] = useState(getInitialCatalog);
 
   useEffect(() => {
     let active = true;
@@ -83,7 +83,7 @@ export default function App() {
           </div>
         </div>
         <div className="hero-photo">
-          <img src="/hero.webp" alt="Lata de postre Cokoa" />
+          <img src="/hero.webp" alt="Lata de postre Cokoa" fetchPriority="high" decoding="async" />
         </div>
       </section>
 
@@ -94,14 +94,14 @@ export default function App() {
           <div className="section-heart"><span></span>♥<span></span></div>
         </div>
         <div className="postres-grid">
-          {products.map((item) => (
+          {products.map((item, index) => (
             <div className="product-card" key={item.id}>
               <div className="product-photo">
-                {item.image ? (
-                  <img src={item.image} alt={item.name} />
-                ) : (
-                  <div className="placeholder">{item.name}</div>
-                )}
+                <CatalogImage
+                  item={item}
+                  priority={index === 0}
+                  sizes="(max-width: 700px) calc(100vw - 40px), (max-width: 1100px) 42vw, 300px"
+                />
                 <div className="product-badge">300ML</div>
               </div>
               <div className="product-body">
@@ -128,7 +128,7 @@ export default function App() {
           {boxes.map((box) => (
             <div className="box-card" key={box.id}>
               <div className="box-photo">
-                {box.image ? <img src={box.image} alt={box.name} /> : <div className="placeholder">{box.name}</div>}
+                <CatalogImage item={box} sizes="(max-width: 700px) calc(100vw - 40px), 330px" />
               </div>
               <div className="box-body">
                 <h3 className="box-name">{box.name}</h3>
@@ -155,7 +155,7 @@ export default function App() {
           {experiences.map((exp) => (
             <div className="exp-card" key={exp.id}>
               <div className="exp-photo">
-                {exp.image ? <img src={exp.image} alt={exp.name} /> : <div className="placeholder">{exp.name}</div>}
+                <CatalogImage item={exp} sizes="(max-width: 700px) calc(100vw - 40px), 520px" />
               </div>
               <div className="exp-body">
                 <h3 className="exp-name">{exp.name}</h3>
@@ -213,5 +213,27 @@ export default function App() {
         resetCart={() => setCart([])}
       />
     </div>
+  );
+}
+
+function CatalogImage({ item, priority = false, sizes }) {
+  const [failed, setFailed] = useState(false);
+  const image = item.image || '';
+
+  useEffect(() => setFailed(false), [image]);
+
+  if (!image || failed) return <div className="placeholder">{item.name}</div>;
+
+  return (
+    <img
+      src={image}
+      srcSet={driveImageSrcSet(image)}
+      sizes={sizes}
+      alt={item.name}
+      loading={priority ? 'eager' : 'lazy'}
+      fetchPriority={priority ? 'high' : 'auto'}
+      decoding="async"
+      onError={() => setFailed(true)}
+    />
   );
 }

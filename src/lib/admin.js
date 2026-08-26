@@ -12,12 +12,21 @@ export function clearPin() {
 }
 
 async function post(action, payload) {
-  const res = await fetch(ENDPOINT, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ action, ...payload }),
-  });
-  return res.json();
+  try {
+    const res = await fetch(ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action, ...payload }),
+    });
+    const text = await res.text();
+    try {
+      return JSON.parse(text);
+    } catch {
+      return { ok: false, error: `Respuesta invalida del servidor (${res.status}).` };
+    }
+  } catch (err) {
+    return { ok: false, error: err && err.message ? err.message : 'No se pudo conectar con el servidor.' };
+  }
 }
 
 export async function login(pin) {
@@ -27,8 +36,17 @@ export async function login(pin) {
 
 export async function fetchAdminCatalog(pin) {
   if (!ENDPOINT) return { ok: false, error: 'El sitio no tiene configurado VITE_ORDERS_ENDPOINT.' };
-  const res = await fetch(`${ENDPOINT}?action=catalogo_admin&pin=${encodeURIComponent(pin)}`);
-  return res.json();
+  try {
+    const res = await fetch(`${ENDPOINT}?action=catalogo_admin&pin=${encodeURIComponent(pin)}`);
+    const text = await res.text();
+    try {
+      return JSON.parse(text);
+    } catch {
+      return { ok: false, error: `Respuesta invalida del servidor (${res.status}).` };
+    }
+  } catch (err) {
+    return { ok: false, error: err && err.message ? err.message : 'No se pudo cargar el catalogo.' };
+  }
 }
 
 export async function saveItem(pin, item) {

@@ -72,6 +72,10 @@ export default function CartDrawer({ open, onClose, cart, changeQty, resetCart }
     };
     const res = await submitOrder(payload);
     setSending(false);
+    if (!res.ok && res.error) {
+      alert(res.error);
+      return;
+    }
     setOrderId(res.orderId);
     const link = buildWhatsAppLink({
       ...payload,
@@ -134,7 +138,12 @@ export default function CartDrawer({ open, onClose, cart, changeQty, resetCart }
                       <div className="qty-control">
                         <button className="qty-btn" onClick={() => changeQty(line.id, -1)} aria-label="Quitar uno">−</button>
                         <span className="qty-num">{line.qty}</span>
-                        <button className="qty-btn" onClick={() => changeQty(line.id, 1)} aria-label="Agregar uno">+</button>
+                        <button
+                          className="qty-btn"
+                          onClick={() => changeQty(line.id, 1)}
+                          aria-label="Agregar uno"
+                          disabled={line.stock !== null && line.qty >= line.stock}
+                        >+</button>
                       </div>
                       <div className="cart-line-total">{fmt(line.price * line.qty)}</div>
                     </div>

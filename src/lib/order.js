@@ -15,8 +15,8 @@ const WA_NUMBER = import.meta.env.VITE_WHATSAPP_NUMBER || '';
  * Content-Type text/plain evita el preflight CORS: Apps Script no responde
  * a OPTIONS, pero acepta solicitudes "simples" y ContentService devuelve
  * la respuesta con CORS abierto.
- * Devuelve { ok, orderId } — si el backend falla, ok:false y orderId local
- * de respaldo para que el pedido nunca se pierda (siempre queda WhatsApp).
+ * Los errores de negocio (por ejemplo, inventario agotado) se devuelven al
+ * carrito. Los errores de red conservan WhatsApp como respaldo.
  */
 export async function submitOrder(payload) {
   const fallbackId = 'CW-' + Math.floor(1000 + Math.random() * 9000);
@@ -29,10 +29,11 @@ export async function submitOrder(payload) {
     });
     const data = await res.json();
     if (data && data.ok && data.orderId) return { ok: true, orderId: data.orderId };
-    return { ok: false, orderId: fallbackId };
+    if (data && data.error) return { ok: false, orderId: null, error: data.error };
+    return { ok: false, orderId: fallbackId, offline: true };
   } catch (err) {
     console.error('Error enviando pedido:', err);
-    return { ok: false, orderId: fallbackId };
+    return { ok: false, orderId: fallbackId, offline: true };
   }
 }
 

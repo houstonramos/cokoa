@@ -1,15 +1,55 @@
 import { PRODUCTS as STATIC_PRODUCTS, BOXES as STATIC_BOXES, EXPERIENCES as STATIC_EXPERIENCES } from '../data/catalog';
 
 const ENDPOINT = import.meta.env.VITE_ORDERS_ENDPOINT || '';
-const CATALOG_CACHE_KEY = 'cokoa_live_catalog_v1';
-const DRIVE_IMAGE_WIDTHS = [480, 720, 960];
+const CATALOG_CACHE_KEY = 'cokoa_live_catalog_v2';
+const DRIVE_IMAGE_WIDTHS = [480, 720, 960, 1280];
+
+export const DEFAULT_CATEGORIES = [
+  { id: 'latas', name: 'Latas', order: 1, active: true },
+  { id: 'postres', name: 'Postres', order: 2, active: true },
+  { id: 'bebidas', name: 'Bebidas', order: 3, active: true },
+  { id: 'chocolates', name: 'Chocolates', order: 4, active: true },
+  { id: 'cosmeticos', name: 'Cosméticos', order: 5, active: true },
+  { id: 'cajas', name: 'Cajas', order: 6, active: true },
+  { id: 'experiencias', name: 'Experiencias', order: 7, active: true },
+];
+
+const STATIC_ITEMS = [
+  ...STATIC_PRODUCTS.map((item) => ({ ...item, category: 'Latas' })),
+  ...STATIC_BOXES.map((item) => ({ ...item, category: 'Cajas' })),
+  ...STATIC_EXPERIENCES.map((item) => ({ ...item, category: 'Experiencias' })),
+];
 
 const fallbackCatalog = () => ({
-  products: STATIC_PRODUCTS,
-  boxes: STATIC_BOXES,
-  experiences: STATIC_EXPERIENCES,
+  items: STATIC_ITEMS.map((item) => ({ ...item, stock: null, offerActive: false, offerPrice: 0, active: true })),
+  categories: DEFAULT_CATEGORIES,
+  settings: { heroImage: '/hero.webp' },
   live: false,
 });
+
+export function slugifyCategory(value) {
+  return String(value || 'categoria')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '') || 'categoria';
+}
+
+export function normalizeCategoryName(value) {
+  const name = String(value || '').trim();
+  const key = slugifyCategory(name);
+  const known = {
+    lata: 'Latas', latas: 'Latas',
+    postre: 'Postres', postres: 'Postres',
+    bebida: 'Bebidas', bebidas: 'Bebidas',
+    chocolate: 'Chocolates', chocolates: 'Chocolates',
+    cosmetico: 'Cosméticos', cosmeticos: 'Cosméticos',
+    caja: 'Cajas', cajas: 'Cajas',
+    experiencia: 'Experiencias', experiencias: 'Experiencias',
+  };
+  return known[key] || name || 'Postres';
+}
 
 function driveImageId(value) {
   const input = String(value || '').trim();
@@ -46,11 +86,88 @@ export function driveImageSrcSet(value) {
     .join(', ');
 }
 
+export function hasOffer(item) {
+  const regular = Number(item && item.price) || 0;
+  const offer = Number(item && item.offerPrice) || 0;
+  return item && item.offerActive === true && offer > 0 && offer < regular;
+}
+
+export function itemPrice(item) {
+  return hasOffer(item) ? Number(item.offerPrice) : Number(item.price) || 0;
+}
+
+export function isSoldOut(item) {
+  return item && item.stock !== null && item.stock !== '' && Number(item.stock) <= 0;
+}
+
+function normalizeStock(value) {
+  if (value === '' || value === null || typeof value === 'undefined') return null;
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? Math.floor(number) : null;
+}
+
+function asBoolean(value, fallback = false) {
+  if (typeof value === 'boolean') return value;
+  const normalized = String(value || '').trim().toLowerCase();
+  if (['si', 'sí', 'true', '1'].includes(normalized)) return true;
+  if (['no', 'false', '0'].includes(normalized)) return false;
+  return fallback;
+}
+
+function mapItem(item) {
+  return {
+    id: String(item.id || '').trim(),
+    category: normalizeCategoryName(item.category),
+    name: String(item.name || '').trim(),
+    desc: String(item.desc || '').trim(),
+    price: Number(item.price) || 0,
+    unit: String(item.unit || '').trim(),
+    image: normalizeDriveImageUrl(item.image || item.rawImage || ''),
+    rawImage: String(item.rawImage || item.image || '').trim(),
+    active: item.active !== false,
+    stock: normalizeStock(item.stock),
+    offerActive: asBoolean(item.offerActive, false),
+    offerPrice: Number(item.offerPrice) || 0,
+  };
+}
+
+function mapCategories(values, items) {
+  const source = Array.isArray(values) && values.length ? values : DEFAULT_CATEGORIES;
+  const seen = new Set();
+  const categories = source.map((category, index) => {
+    const name = normalizeCategoryName(category.name || category.label || category.id || category);
+    const id = slugifyCategory(category.id || name);
+    seen.add(id);
+    return {
+      id,
+      name,
+      order: Number(category.order) || index + 1,
+      active: category.active !== false,
+    };
+  });
+
+  items.forEach((item) => {
+    const id = slugifyCategory(item.category);
+    if (!seen.has(id)) {
+      categories.push({ id, name: item.category, order: categories.length + 1, active: true });
+      seen.add(id);
+    }
+  });
+  return categories.sort((a, b) => a.order - b.order);
+}
+
+function mapSettings(settings) {
+  const value = settings && typeof settings === 'object' ? settings : {};
+  return {
+    heroImage: normalizeDriveImageUrl(value.heroImage || value.hero_image || '/hero.webp', 1280),
+  };
+}
+
 function isCatalog(value) {
   return value
-    && Array.isArray(value.products)
-    && Array.isArray(value.boxes)
-    && Array.isArray(value.experiences);
+    && Array.isArray(value.items)
+    && Array.isArray(value.categories)
+    && value.settings;
 }
 
 /** Muestra el ultimo catalogo valido de inmediato mientras se actualiza en segundo plano. */
@@ -71,47 +188,24 @@ function cacheCatalog(catalog) {
   }
 }
 
-/**
- * Trae el catálogo en vivo desde la hoja "Catálogo" (el panel de control de Manu).
- * Si el Apps Script no está configurado, falla, o tarda demasiado, el sitio sigue
- * funcionando con el catálogo de respaldo (src/data/catalog.js) — nunca se cae.
- */
+/** Trae el catalogo, las categorias y la portada desde el panel de control. */
 export async function fetchCatalog() {
   const fallback = getInitialCatalog();
   if (!ENDPOINT) return fallback;
 
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 6000);
+    const timeout = setTimeout(() => controller.abort(), 7000);
     const res = await fetch(ENDPOINT + '?action=catalogo', { signal: controller.signal });
     clearTimeout(timeout);
     const data = await res.json();
     if (!data || !data.ok || !Array.isArray(data.items) || data.items.length === 0) return fallback;
 
-    const products = [];
-    const boxes = [];
-    const experiences = [];
-    data.items.forEach((item) => {
-      const mapped = {
-        id: item.id,
-        name: item.name,
-        desc: item.desc,
-        price: item.price,
-        unit: item.unit,
-        image: normalizeDriveImageUrl(item.image || ''),
-      };
-      const cat = (item.category || '').toLowerCase();
-      if (cat.startsWith('caja')) boxes.push(mapped);
-      else if (cat.startsWith('experiencia')) experiences.push(mapped);
-      else products.push(mapped);
-    });
-
-    // Si alguna categoría queda vacía (ej. Manu borró todas las cajas sin querer),
-    // se rellena esa categoría con el respaldo para que el sitio nunca muestre una sección vacía.
+    const items = data.items.map(mapItem).filter((item) => item.id && item.name && item.active !== false);
     const catalog = {
-      products: products.length ? products : fallback.products,
-      boxes: boxes.length ? boxes : fallback.boxes,
-      experiences: experiences.length ? experiences : fallback.experiences,
+      items,
+      categories: mapCategories(data.categories, items),
+      settings: mapSettings(data.settings),
       live: true,
     };
     cacheCatalog(catalog);

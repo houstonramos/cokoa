@@ -57,6 +57,14 @@ export async function deleteItem(pin, id) {
   return post('eliminar_item', { pin, id });
 }
 
+export async function saveCategory(pin, category) {
+  return post('guardar_categoria', { pin, category });
+}
+
+export async function saveSettings(pin, settings) {
+  return post('guardar_configuracion', { pin, settings });
+}
+
 /** Convierte un archivo de imagen a base64 y lo sube; devuelve la URL pública en Drive. */
 export async function uploadImage(pin, file) {
   const base64 = await new Promise((resolve, reject) => {

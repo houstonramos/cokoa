@@ -1,12 +1,71 @@
-import { useState, useEffect, useRef } from 'react';
-import { getSavedPin, savePin, clearPin, login, fetchAdminCatalog, saveItem, deleteItem, uploadImage } from './lib/admin';
-import { normalizeDriveImageUrl } from './lib/catalog';
+import { useEffect, useRef, useState } from 'react';
+import {
+  clearPin,
+  deleteItem,
+  fetchAdminCatalog,
+  getSavedPin,
+  login,
+  saveCategory,
+  saveItem,
+  savePin,
+  saveSettings,
+  uploadImage,
+} from './lib/admin';
+import {
+  DEFAULT_CATEGORIES,
+  hasOffer,
+  normalizeCategoryName,
+  normalizeDriveImageUrl,
+  slugifyCategory,
+} from './lib/catalog';
 
-const CATEGORIES = ['Postre', 'Caja', 'Experiencia'];
-const emptyItem = () => ({ id: '', category: 'Postre', name: '', desc: '', price: '', unit: 'lata 300ml', image: '', rawImage: '', active: true });
+const emptyItem = (category = 'Latas') => ({
+  id: '',
+  category,
+  name: '',
+  desc: '',
+  price: '',
+  unit: '',
+  image: '',
+  rawImage: '',
+  active: true,
+  stock: '',
+  offerActive: false,
+  offerPrice: '',
+});
 
 function fmt(n) {
   return 'RD$' + Number(n || 0).toLocaleString('es-DO');
+}
+
+function normalizeAdminItem(item) {
+  return {
+    ...emptyItem(normalizeCategoryName(item.category)),
+    ...item,
+    category: normalizeCategoryName(item.category),
+    stock: item.stock === null || typeof item.stock === 'undefined' ? '' : item.stock,
+    offerActive: item.offerActive === true,
+    offerPrice: item.offerPrice || '',
+  };
+}
+
+function normalizeCategories(values, items) {
+  const source = Array.isArray(values) && values.length ? values : DEFAULT_CATEGORIES;
+  const categories = source.map((category, index) => ({
+    id: slugifyCategory(category.id || category.name || category),
+    name: normalizeCategoryName(category.name || category),
+    order: Number(category.order) || index + 1,
+    active: category.active !== false,
+  }));
+  const seen = new Set(categories.map((category) => category.id));
+  items.forEach((item) => {
+    const id = slugifyCategory(item.category);
+    if (!seen.has(id)) {
+      categories.push({ id, name: item.category, order: categories.length + 1, active: true });
+      seen.add(id);
+    }
+  });
+  return categories.sort((a, b) => a.order - b.order);
 }
 
 export default function AdminApp() {
@@ -16,12 +75,15 @@ export default function AdminApp() {
   const [loginError, setLoginError] = useState('');
   const [checking, setChecking] = useState(true);
 
-  const [items, setItems] = useState(null); // null = cargando
+  const [items, setItems] = useState(null);
+  const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
+  const [settings, setSettings] = useState({ heroImage: '/hero.webp' });
+  const [newCategory, setNewCategory] = useState('');
   const [loadError, setLoadError] = useState('');
   const [savingId, setSavingId] = useState(null);
+  const [heroUploading, setHeroUploading] = useState(false);
   const [toast, setToast] = useState('');
 
-  // Al entrar, si ya había un PIN guardado en esta sesión, intenta usarlo directo.
   useEffect(() => {
     if (!pin) { setChecking(false); return; }
     login(pin).then((res) => {
@@ -37,12 +99,18 @@ export default function AdminApp() {
   const loadCatalog = async () => {
     setLoadError('');
     const res = await fetchAdminCatalog(pin);
-    if (res.ok) setItems(Array.isArray(res.items) ? res.items : []);
-    else setLoadError(res.error || 'No se pudo cargar el catálogo.');
+    if (!res.ok) {
+      setLoadError(res.error || 'No se pudo cargar el catálogo.');
+      return;
+    }
+    const nextItems = (Array.isArray(res.items) ? res.items : []).map(normalizeAdminItem);
+    setItems(nextItems);
+    setCategories(normalizeCategories(res.categories, nextItems));
+    setSettings({ heroImage: (res.settings && (res.settings.heroImage || res.settings.hero_image)) || '/hero.webp' });
   };
 
-  const doLogin = async (e) => {
-    e.preventDefault();
+  const doLogin = async (event) => {
+    event.preventDefault();
     setLoginError('');
     const res = await login(pinInput);
     if (res.ok) {
@@ -54,73 +122,134 @@ export default function AdminApp() {
     }
   };
 
-  const logout = () => { clearPin(); setAuthed(false); setPin(''); setPinInput(''); setItems(null); };
+  const logout = () => {
+    clearPin();
+    setAuthed(false);
+    setPin('');
+    setPinInput('');
+    setItems(null);
+  };
 
-  const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 2500); };
+  const showToast = (message) => {
+    setToast(message);
+    window.setTimeout(() => setToast(''), 2800);
+  };
 
-  const updateItem = (idx, patch) => setItems((prev) => (prev || []).map((it, i) => (i === idx ? { ...it, ...patch } : it)));
+  const updateItem = (index, patch) => setItems((previous) => (previous || [])
+    .map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item)));
 
-  const addNew = (category) => setItems((prev) => [{ ...emptyItem(), category }, ...(prev || [])]);
+  const addNew = (category) => setItems((previous) => [{ ...emptyItem(category) }, ...(previous || [])]);
 
-  const remove = async (idx) => {
-    const item = items[idx];
+  const addCategory = async (event) => {
+    event.preventDefault();
+    const name = newCategory.trim();
+    if (!name) return;
+    if (categories.some((category) => slugifyCategory(category.name) === slugifyCategory(name))) {
+      showToast('Esa categoría ya existe.');
+      return;
+    }
+    const category = { id: slugifyCategory(name), name, order: categories.length + 1, active: true };
+    const res = await saveCategory(pin, category);
+    if (!res.ok) {
+      showToast('No se pudo crear la categoría: ' + (res.error || 'intenta de nuevo'));
+      return;
+    }
+    setCategories((previous) => [...previous, category]);
+    setNewCategory('');
+    showToast('Categoría agregada.');
+  };
+
+  const remove = async (index) => {
+    const item = items[index];
     if (!window.confirm(`¿Eliminar "${item.name || 'este producto'}" definitivamente?`)) return;
-    if (item.id) await deleteItem(pin, item.id);
-    setItems((prev) => prev.filter((_, i) => i !== idx));
+    if (item.id) {
+      const res = await deleteItem(pin, item.id);
+      if (!res.ok) {
+        showToast('No se pudo eliminar: ' + (res.error || 'intenta de nuevo'));
+        return;
+      }
+    }
+    setItems((previous) => previous.filter((_, itemIndex) => itemIndex !== index));
     showToast('Producto eliminado.');
   };
 
-  const save = async (idx) => {
-    const item = items[idx];
+  const save = async (index) => {
+    const item = items[index];
     if (!item.name.trim() || !item.price) {
       showToast('Falta el nombre o el precio.');
       return;
     }
-    setSavingId(idx);
+    if (item.offerActive && (!item.offerPrice || Number(item.offerPrice) >= Number(item.price))) {
+      showToast('El precio de oferta debe ser menor que el precio regular.');
+      return;
+    }
+    setSavingId(index);
     const res = await saveItem(pin, item);
     setSavingId(null);
     if (res.ok) {
-      updateItem(idx, { id: res.id });
-      showToast('Guardado ✓');
+      updateItem(index, { id: res.id });
+      showToast('Guardado correctamente.');
     } else {
       showToast('Error al guardar: ' + (res.error || 'intenta de nuevo'));
     }
   };
 
-  const onImagePick = async (idx, file) => {
+  const onImagePick = async (index, file) => {
     if (!file) return;
-    const itemBeforeUpload = items[idx];
-    updateItem(idx, { uploading: true });
+    const itemBeforeUpload = items[index];
+    updateItem(index, { uploading: true });
     try {
       const res = await uploadImage(pin, file);
       if (!res.ok) {
-        updateItem(idx, { uploading: false });
+        updateItem(index, { uploading: false });
         showToast('No se pudo subir la foto: ' + (res.error || 'intenta de nuevo'));
         return;
       }
 
       const displayUrl = normalizeDriveImageUrl(res.url);
-      const itemWithImage = { ...itemBeforeUpload, image: displayUrl, rawImage: displayUrl, uploading: false };
-      updateItem(idx, { image: displayUrl, rawImage: displayUrl, uploading: false });
+      const itemWithImage = { ...itemBeforeUpload, image: displayUrl, rawImage: res.url, uploading: false };
+      updateItem(index, { image: displayUrl, rawImage: res.url, uploading: false });
 
-      // Persist the photo immediately when the card has enough data to be saved.
       if (itemBeforeUpload.name && itemBeforeUpload.name.trim() && itemBeforeUpload.price) {
-        setSavingId(idx);
+        setSavingId(index);
         const saveRes = await saveItem(pin, itemWithImage);
         setSavingId(null);
         if (saveRes.ok) {
-          updateItem(idx, { id: saveRes.id });
-          showToast('Foto subida y guardada ✓');
+          updateItem(index, { id: saveRes.id });
+          showToast('Foto subida y guardada.');
           return;
         }
         showToast('Foto subida, pero no se pudo guardar: ' + (saveRes.error || 'pulsa Guardar'));
         return;
       }
 
-      showToast('Foto subida ✓ — completa nombre y precio, luego pulsa Guardar.');
-    } catch (err) {
-      updateItem(idx, { uploading: false });
-      showToast('No se pudo subir la foto: ' + (err && err.message ? err.message : 'intenta de nuevo'));
+      showToast('Foto subida. Completa nombre y precio, luego pulsa Guardar.');
+    } catch (error) {
+      updateItem(index, { uploading: false });
+      showToast('No se pudo subir la foto: ' + (error && error.message ? error.message : 'intenta de nuevo'));
+    }
+  };
+
+  const onHeroImagePick = async (file) => {
+    if (!file) return;
+    setHeroUploading(true);
+    try {
+      const upload = await uploadImage(pin, file);
+      if (!upload.ok) {
+        showToast('No se pudo subir la portada: ' + (upload.error || 'intenta de nuevo'));
+        return;
+      }
+      const saved = await saveSettings(pin, { heroImage: upload.url });
+      if (!saved.ok) {
+        showToast('La imagen subió, pero no se pudo guardar como portada.');
+        return;
+      }
+      setSettings({ heroImage: upload.url });
+      showToast('Portada actualizada.');
+    } catch (error) {
+      showToast('No se pudo actualizar la portada: ' + (error && error.message ? error.message : 'intenta de nuevo'));
+    } finally {
+      setHeroUploading(false);
     }
   };
 
@@ -138,7 +267,7 @@ export default function AdminApp() {
             inputMode="numeric"
             placeholder="Clave"
             value={pinInput}
-            onChange={(e) => setPinInput(e.target.value)}
+            onChange={(event) => setPinInput(event.target.value)}
             autoFocus
           />
           {loginError && <p className="admin-error">{loginError}</p>}
@@ -159,71 +288,171 @@ export default function AdminApp() {
       </header>
 
       <main className="admin-main">
+        <section className="admin-hero-editor">
+          <div className="admin-hero-preview">
+            <img src={normalizeDriveImageUrl(settings.heroImage, 1280)} alt="Portada actual" />
+            {heroUploading && <div className="admin-photo-uploading">Subiendo portada…</div>}
+            <ImagePicker
+              className="admin-hero-photo-btn"
+              label="Cambiar portada"
+              onPick={onHeroImagePick}
+            />
+          </div>
+          <div className="admin-hero-copy">
+            <span>Imagen principal</span>
+            <h1>Portada de la tienda</h1>
+            <p>Cámbiala aquí cuando quieras. Se actualizará en el inicio sin tocar el código de la web.</p>
+          </div>
+        </section>
+
+        <section className="admin-category-manager">
+          <div>
+            <span className="admin-section-kicker">Organización de la tienda</span>
+            <h2>Categorías</h2>
+            <p>Las categorías con productos visibles aparecerán automáticamente en el menú del sitio.</p>
+          </div>
+          <div className="admin-category-controls">
+            <div className="admin-category-chips">
+              {categories.map((category) => <span key={category.id}>{category.name}</span>)}
+            </div>
+            <form className="admin-category-form" onSubmit={addCategory}>
+              <input
+                value={newCategory}
+                onChange={(event) => setNewCategory(event.target.value)}
+                placeholder="Nueva categoría"
+              />
+              <button type="submit" className="btn-outline-small">Agregar</button>
+            </form>
+          </div>
+        </section>
+
         <div className="admin-title-row">
-          <h1>Tu catálogo</h1>
+          <div>
+            <span className="admin-section-kicker">Productos, inventario y ofertas</span>
+            <h1>Tu catálogo</h1>
+          </div>
           <div className="admin-add-buttons">
-            {CATEGORIES.map((c) => (
-              <button key={c} className="btn-outline-small" onClick={() => addNew(c)}>+ {c}</button>
+            {categories.map((category) => (
+              <button key={category.id} className="btn-outline-small" onClick={() => addNew(category.name)}>
+                + {category.name}
+              </button>
             ))}
           </div>
         </div>
 
         {loadError && <p className="admin-error">{loadError}</p>}
         {items === null && !loadError && <p className="admin-loading">Cargando tu catálogo…</p>}
-
         {items && items.length === 0 && <p className="admin-empty">Aún no tienes productos. Agrega uno arriba.</p>}
 
+        <datalist id="cokoa-units">
+          <option value="lata 250ml" />
+          <option value="lata 300ml" />
+          <option value="lata 500ml" />
+          <option value="porción" />
+          <option value="unidad" />
+          <option value="por persona" />
+          <option value="caja de regalo" />
+        </datalist>
+
         <div className="admin-grid">
-          {items && items.map((item, idx) => (
-            <div className={'admin-card' + (item.active === false ? ' admin-card-inactive' : '')} key={idx}>
-              <div className="admin-card-photo">
-                {item.image ? (
-                  <img src={normalizeDriveImageUrl(item.image)} alt={item.name} loading="lazy" decoding="async" />
-                ) : (
-                  <div className="admin-photo-empty">Sin foto</div>
-                )}
-                {item.uploading && <div className="admin-photo-uploading">Subiendo…</div>}
-                <ImagePicker onPick={(file) => onImagePick(idx, file)} />
-              </div>
-              <div className="admin-card-body">
-                <select value={item.category} onChange={(e) => updateItem(idx, { category: e.target.value })}>
-                  {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
-                <input
-                  className="admin-input-name"
-                  placeholder="Nombre"
-                  value={item.name}
-                  onChange={(e) => updateItem(idx, { name: e.target.value })}
-                />
-                <textarea
-                  placeholder="Descripción"
-                  rows={2}
-                  value={item.desc}
-                  onChange={(e) => updateItem(idx, { desc: e.target.value })}
-                />
-                <div className="admin-row-2">
-                  <div>
-                    <label>Precio (RD$)</label>
-                    <input type="number" value={item.price} onChange={(e) => updateItem(idx, { price: e.target.value })} />
+          {items && items.map((item, index) => {
+            const soldOut = item.stock !== '' && Number(item.stock) <= 0;
+            return (
+              <article
+                className={`admin-card${item.active === false ? ' admin-card-inactive' : ''}${soldOut ? ' admin-card-soldout' : ''}`}
+                key={item.id || `new-${index}`}
+              >
+                <div className="admin-card-photo">
+                  {item.image ? (
+                    <img src={normalizeDriveImageUrl(item.image)} alt={item.name} loading="lazy" decoding="async" />
+                  ) : (
+                    <div className="admin-photo-empty">Sin foto</div>
+                  )}
+                  <div className="admin-card-statuses">
+                    {soldOut && <span className="admin-soldout-badge">Agotado</span>}
+                    {hasOffer(item) && <span className="admin-offer-badge">Oferta</span>}
                   </div>
-                  <div>
-                    <label>Unidad</label>
-                    <input value={item.unit} onChange={(e) => updateItem(idx, { unit: e.target.value })} />
+                  {item.uploading && <div className="admin-photo-uploading">Subiendo…</div>}
+                  <ImagePicker onPick={(file) => onImagePick(index, file)} />
+                </div>
+                <div className="admin-card-body">
+                  <select value={item.category} onChange={(event) => updateItem(index, { category: event.target.value })}>
+                    {categories.map((category) => (
+                      <option key={category.id} value={category.name}>{category.name}</option>
+                    ))}
+                  </select>
+                  <input
+                    className="admin-input-name"
+                    placeholder="Nombre"
+                    value={item.name}
+                    onChange={(event) => updateItem(index, { name: event.target.value })}
+                  />
+                  <textarea
+                    placeholder="Descripción"
+                    rows={2}
+                    value={item.desc}
+                    onChange={(event) => updateItem(index, { desc: event.target.value })}
+                  />
+                  <div className="admin-row-2">
+                    <div>
+                      <label>Precio regular (RD$)</label>
+                      <input type="number" min="0" value={item.price} onChange={(event) => updateItem(index, { price: event.target.value })} />
+                    </div>
+                    <div>
+                      <label>Unidad o tamaño</label>
+                      <input list="cokoa-units" value={item.unit} onChange={(event) => updateItem(index, { unit: event.target.value })} placeholder="Ej. lata 250ml" />
+                    </div>
+                  </div>
+                  <div className="admin-commerce-row">
+                    <div className="admin-stock-box">
+                      <label>Inventario</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={item.stock}
+                        onChange={(event) => updateItem(index, { stock: event.target.value })}
+                        placeholder="Sin límite"
+                      />
+                      <small>Vacío = sin límite · 0 = agotado</small>
+                    </div>
+                    <div className={`admin-offer-box${item.offerActive ? ' active' : ''}`}>
+                      <label className="admin-offer-toggle">
+                        <input
+                          type="checkbox"
+                          checked={item.offerActive === true}
+                          onChange={(event) => updateItem(index, { offerActive: event.target.checked })}
+                        />
+                        En oferta
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={item.offerPrice}
+                        onChange={(event) => updateItem(index, { offerPrice: event.target.value })}
+                        placeholder="Precio oferta"
+                        disabled={!item.offerActive}
+                      />
+                    </div>
+                  </div>
+                  <label className="admin-toggle">
+                    <input
+                      type="checkbox"
+                      checked={item.active !== false}
+                      onChange={(event) => updateItem(index, { active: event.target.checked })}
+                    />
+                    Visible en el sitio {item.price ? `· ${hasOffer(item) ? fmt(item.offerPrice) : fmt(item.price)}` : ''}
+                  </label>
+                  <div className="admin-card-actions">
+                    <button className="btn-dark admin-save" onClick={() => save(index)} disabled={savingId === index}>
+                      {savingId === index ? 'Guardando…' : 'Guardar'}
+                    </button>
+                    <button className="admin-delete" onClick={() => remove(index)}>Eliminar</button>
                   </div>
                 </div>
-                <label className="admin-toggle">
-                  <input type="checkbox" checked={item.active !== false} onChange={(e) => updateItem(idx, { active: e.target.checked })} />
-                  Visible en el sitio {item.price ? `· ${fmt(item.price)}` : ''}
-                </label>
-                <div className="admin-card-actions">
-                  <button className="btn-dark admin-save" onClick={() => save(idx)} disabled={savingId === idx}>
-                    {savingId === idx ? 'Guardando…' : 'Guardar'}
-                  </button>
-                  <button className="admin-delete" onClick={() => remove(idx)}>Eliminar</button>
-                </div>
-              </div>
-            </div>
-          ))}
+              </article>
+            );
+          })}
         </div>
       </main>
 
@@ -232,21 +461,21 @@ export default function AdminApp() {
   );
 }
 
-function ImagePicker({ onPick }) {
+function ImagePicker({ onPick, label = 'Cambiar foto', className = 'admin-photo-btn' }) {
   const ref = useRef(null);
   return (
     <>
-      <button type="button" className="admin-photo-btn" onClick={() => ref.current && ref.current.click()}>
-        📷 Cambiar foto
+      <button type="button" className={className} onClick={() => ref.current && ref.current.click()}>
+        {label}
       </button>
       <input
         ref={ref}
         type="file"
         accept="image/*"
         style={{ display: 'none' }}
-        onChange={(e) => {
-          const file = e.target.files && e.target.files[0];
-          e.target.value = '';
+        onChange={(event) => {
+          const file = event.target.files && event.target.files[0];
+          event.target.value = '';
           onPick(file);
         }}
       />

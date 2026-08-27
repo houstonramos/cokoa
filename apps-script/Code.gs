@@ -1,22 +1,20 @@
 /**
- * Cokoa — Backend de pedidos (Google Apps Script)
+ * Cokoa - backend de pedidos y panel de administracion.
  *
- * Recibe pedidos vía doPost, registra en la hoja "Pedidos",
- * genera un ID de pedido secuencial y envía correos de confirmación.
- *
- * INSTRUCCIONES DE CONFIGURACIÓN: ver README.md del proyecto.
+ * Recibe pedidos, controla inventario, administra catalogo/categorias/portada,
+ * guarda fotos en Drive y envia confirmaciones por correo.
  */
 
-// ====== CONFIGURACIÓN — edita estos valores ======
+// ====== CONFIGURACION - edita estos valores en Google Apps Script ======
 const CONFIG = {
   SHEET_NAME: 'Pedidos',
-  BUSINESS_EMAIL: 'pedidos@tunegocio.com', // correo donde llegan las alertas internas
+  BUSINESS_EMAIL: 'pedidos@tunegocio.com',
   BUSINESS_NAME: 'Cokoa by Chef Manu Rossi',
   ORDER_PREFIX: 'CK-',
-  ADMIN_PIN: '1234', // ← CAMBIA ESTE PIN antes de entregar. Es la clave del panel de administración.
+  ADMIN_PIN: '1234',
   DRIVE_FOLDER_NAME: 'Cokoa - Fotos de productos',
 };
-// =================================================
+// ======================================================================
 
 const HEADERS = [
   'ID Pedido', 'Fecha/Hora', 'Estado', 'Nombre', 'Teléfono', 'Email',
@@ -24,29 +22,95 @@ const HEADERS = [
   'Dirección', 'Fecha entrega', 'Forma de pago', 'Notas',
 ];
 
+const CATALOG_SHEET_NAME = 'Catálogo';
+const CATALOG_HEADERS = [
+  'ID', 'Categoría', 'Nombre', 'Descripción', 'Precio', 'Unidad',
+  'Foto (enlace de Drive)', 'Activo', 'Inventario', 'En oferta', 'Precio oferta',
+];
+
+const CATALOG_SEED = [
+  ['baileys', 'Latas', 'Baileys', 'Crema de Baileys, chocolate y bizcocho de cacao.', 450, 'lata 300ml', '', 'Sí', '', 'No', ''],
+  ['chinola', 'Latas', 'Chinola', 'Crema de chinola con crocante de chocolate.', 450, 'lata 300ml', '', 'Sí', '', 'No', ''],
+  ['pistacho', 'Latas', 'Pistacho y Frambuesa', 'Crema de pistacho con frambuesa y crocante de chocolate.', 450, 'lata 300ml', '', 'Sí', '', 'No', ''],
+  ['pannacotta', 'Latas', 'Panna Cotta', 'Panna cotta cremosa con coulis de frutos rojos y galleta de vainilla.', 450, 'lata 300ml', '', 'Sí', '', 'No', ''],
+  ['dulceleche', 'Latas', 'Dulce de Leche y Café', 'Dulce de leche, crema de café y bizcocho de chocolate.', 450, 'lata 300ml', '', 'Sí', '', 'No', ''],
+  ['carrot', 'Latas', 'Carrot Cake', 'Bizcocho de zanahoria gluten free con crema de queso.', 450, 'lata 300ml', '', 'Sí', '', 'No', ''],
+  ['tresleches', 'Latas', 'Tres Leches', 'Bizcocho tres leches con crema suave.', 450, 'lata 300ml', '', 'Sí', '', 'No', ''],
+  ['avellanas', 'Latas', 'Chocolate y Avellanas', 'Mousse de chocolate y crema de avellanas.', 450, 'lata 300ml', '', 'Sí', '', 'No', ''],
+  ['oreo', 'Latas', 'Oreo', 'Crema de vainilla con galleta Oreo y trozos crujientes.', 450, 'lata 300ml', '', 'Sí', '', 'No', ''],
+  ['chocolate', 'Latas', 'Chocolate', 'Mousse de chocolate y bizcocho de cacao húmedo.', 450, 'lata 300ml', '', 'Sí', '', 'No', ''],
+  ['box4', 'Cajas', 'Caja Descubre', '4 postres en lata a elección del chef.', 1700, 'caja de regalo', '', 'Sí', '', 'No', ''],
+  ['box6', 'Cajas', 'Caja Comparte', '6 postres en lata surtidos, ideal para regalar.', 2450, 'caja de regalo', '', 'Sí', '', 'No', ''],
+  ['box9', 'Cajas', 'Caja Celebra', '9 postres en lata + tarjeta personalizada.', 3500, 'caja de regalo', '', 'Sí', '', 'No', ''],
+  ['dominicana', 'Experiencias', 'Experiencia Dominicana', 'Café premium dominicano, dulces típicos y prepara tu propio chocolate caliente.', 1800, 'por persona', '', 'Sí', '', 'No', ''],
+  ['immersive', 'Experiencias', 'Cokoa Immersive Experience', 'Una propuesta inmersiva donde la gastronomía, la creatividad y los sabores te llevan a un viaje único.', 2500, 'por persona', '', 'Sí', '', 'No', ''],
+];
+
+const CATEGORY_SHEET_NAME = 'Categorías';
+const CATEGORY_HEADERS = ['ID', 'Nombre', 'Orden', 'Activo'];
+const CATEGORY_SEED = [
+  ['latas', 'Latas', 1, 'Sí'],
+  ['postres', 'Postres', 2, 'Sí'],
+  ['bebidas', 'Bebidas', 3, 'Sí'],
+  ['chocolates', 'Chocolates', 4, 'Sí'],
+  ['cosmeticos', 'Cosméticos', 5, 'Sí'],
+  ['cajas', 'Cajas', 6, 'Sí'],
+  ['experiencias', 'Experiencias', 7, 'Sí'],
+];
+
+const SETTINGS_SHEET_NAME = 'Configuración';
+const SETTINGS_HEADERS = ['Clave', 'Valor'];
+const SETTINGS_SEED = [['hero_image', '/hero.webp']];
+
 function doPost(e) {
-  const body = JSON.parse(e.postData.contents);
+  try {
+    const body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
+    if (body.action === 'login') return handleLogin_(body);
+    if (body.action === 'guardar_item') return handleGuardarItem_(body);
+    if (body.action === 'eliminar_item') return handleEliminarItem_(body);
+    if (body.action === 'subir_imagen') return handleSubirImagen_(body);
+    if (body.action === 'guardar_categoria') return handleGuardarCategoria_(body);
+    if (body.action === 'guardar_configuracion') return handleGuardarConfiguracion_(body);
+    return handlePedido_(body);
+  } catch (err) {
+    return jsonResponse_({ ok: false, error: String(err) });
+  }
+}
 
-  // Acciones del panel de administración (requieren PIN correcto).
-  if (body.action === 'login') return handleLogin_(body);
-  if (body.action === 'guardar_item') return handleGuardarItem_(body);
-  if (body.action === 'eliminar_item') return handleEliminarItem_(body);
-  if (body.action === 'subir_imagen') return handleSubirImagen_(body);
-
-  // Sin "action": es un pedido normal del checkout (compatibilidad con el sitio actual).
-  return handlePedido_(body);
+function doGet(e) {
+  const p = (e && e.parameter) || {};
+  if (p.action === 'catalogo') {
+    return jsonResponse_({
+      ok: true,
+      items: readCatalog_(false),
+      categories: readCategories_(false),
+      settings: readSettings_(),
+    });
+  }
+  if (p.action === 'catalogo_admin') {
+    if (p.pin !== CONFIG.ADMIN_PIN) return jsonResponse_({ ok: false, error: 'PIN incorrecto' });
+    return jsonResponse_({
+      ok: true,
+      items: readCatalog_(true),
+      categories: readCategories_(true),
+      settings: readSettings_(),
+    });
+  }
+  return jsonResponse_({ ok: true, service: 'Cokoa Pedidos', status: 'activo' });
 }
 
 function handlePedido_(data) {
   const lock = LockService.getScriptLock();
-  lock.waitLock(20000); // evita IDs duplicados si llegan 2 pedidos a la vez
+  lock.waitLock(20000);
   try {
+    const reservation = prepareStockReservation_(data.items || []);
+    if (!reservation.ok) return jsonResponse_({ ok: false, error: reservation.error });
+
     const sheet = getOrCreateSheet_();
     const orderId = nextOrderId_(sheet);
     const now = new Date();
-
     const itemsText = (data.items || [])
-      .map(function (i) { return i.qty + 'x ' + i.name + ' (RD$' + i.price + ')'; })
+      .map(function (item) { return item.qty + 'x ' + item.name + ' (RD$' + item.price + ')'; })
       .join(' | ');
 
     sheet.appendRow([
@@ -54,7 +118,7 @@ function handlePedido_(data) {
       Utilities.formatDate(now, 'America/Santo_Domingo', 'yyyy-MM-dd HH:mm:ss'),
       'Nuevo',
       data.name || '',
-      "'" + (data.phone || ''), // apóstrofe fuerza texto: conserva el "+" del número
+      "'" + (data.phone || ''),
       data.email || '',
       itemsText,
       data.subtotal || 0,
@@ -68,9 +132,9 @@ function handlePedido_(data) {
       data.notes || '',
     ]);
 
+    applyStockReservation_(reservation);
     sendBusinessAlert_(orderId, data, itemsText);
     if (data.email) sendCustomerConfirmation_(orderId, data);
-
     return jsonResponse_({ ok: true, orderId: orderId });
   } catch (err) {
     return jsonResponse_({ ok: false, error: String(err) });
@@ -79,7 +143,52 @@ function handlePedido_(data) {
   }
 }
 
-/** Todas las acciones de administración pasan por aquí primero. */
+/** Blank inventory is unlimited; a numeric value is controlled stock. */
+function prepareStockReservation_(items) {
+  const requested = {};
+  (items || []).forEach(function (item) {
+    const id = String(item.id || '').trim();
+    const qty = Math.max(0, Math.floor(Number(item.qty) || 0));
+    if (id && qty) requested[id] = (requested[id] || 0) + qty;
+  });
+
+  const ids = Object.keys(requested);
+  if (!ids.length) return { ok: false, error: 'El carrito está vacío.' };
+
+  const sheet = getOrCreateCatalogSheet_();
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { ok: true, sheet: sheet, updates: [] };
+  const rows = sheet.getRange(2, 1, lastRow - 1, CATALOG_HEADERS.length).getValues();
+  const updates = [];
+
+  rows.forEach(function (row, index) {
+    const id = String(row[0] || '').trim();
+    if (!requested[id]) return;
+    const rawStock = row[8];
+    if (rawStock === '' || rawStock === null) return;
+    const stock = Math.max(0, Math.floor(Number(rawStock) || 0));
+    if (requested[id] > stock) {
+      updates.push({
+        error: stock === 0
+          ? String(row[2] || 'Un producto') + ' está agotado. Retíralo del carrito para continuar.'
+          : 'Solo quedan ' + stock + ' unidades de ' + String(row[2] || 'este producto') + '.',
+      });
+      return;
+    }
+    updates.push({ row: index + 2, stock: stock - requested[id] });
+  });
+
+  const failed = updates.find(function (update) { return update.error; });
+  if (failed) return { ok: false, error: failed.error };
+  return { ok: true, sheet: sheet, updates: updates };
+}
+
+function applyStockReservation_(reservation) {
+  (reservation.updates || []).forEach(function (update) {
+    reservation.sheet.getRange(update.row, 9).setValue(update.stock);
+  });
+}
+
 function checkPin_(body) {
   return body && body.pin === CONFIG.ADMIN_PIN;
 }
@@ -98,15 +207,24 @@ function handleGuardarItem_(body) {
     let id = String(item.id || '').trim();
     if (!id) id = slugify_(item.name) + '-' + Math.floor(Math.random() * 900 + 100);
 
+    let stock = '';
+    if (item.stock !== '' && item.stock !== null && typeof item.stock !== 'undefined') {
+      stock = Math.max(0, Math.floor(Number(item.stock) || 0));
+    }
+    const offerActive = item.offerActive === true;
+    const offerPrice = offerActive ? Math.max(0, Number(item.offerPrice) || 0) : '';
     const row = [
       id,
-      item.category || 'Postre',
+      item.category || 'Postres',
       item.name || '',
       item.desc || '',
       Number(item.price) || 0,
       item.unit || '',
-      item.image || '',
+      item.rawImage || item.image || '',
       item.active === false ? 'No' : 'Sí',
+      stock,
+      offerActive ? 'Sí' : 'No',
+      offerPrice,
     ];
 
     const lastRow = sheet.getLastRow();
@@ -117,11 +235,8 @@ function handleGuardarItem_(body) {
         if (String(ids[i][0]).trim() === id) { targetRow = i + 2; break; }
       }
     }
-    if (targetRow > 0) {
-      sheet.getRange(targetRow, 1, 1, CATALOG_HEADERS.length).setValues([row]);
-    } else {
-      sheet.appendRow(row);
-    }
+    if (targetRow > 0) sheet.getRange(targetRow, 1, 1, CATALOG_HEADERS.length).setValues([row]);
+    else sheet.appendRow(row);
     return jsonResponse_({ ok: true, id: id });
   } catch (err) {
     return jsonResponse_({ ok: false, error: String(err) });
@@ -132,6 +247,8 @@ function handleGuardarItem_(body) {
 
 function handleEliminarItem_(body) {
   if (!checkPin_(body)) return jsonResponse_({ ok: false, error: 'PIN incorrecto' });
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
   try {
     const sheet = getOrCreateCatalogSheet_();
     const id = String(body.id || '').trim();
@@ -145,10 +262,40 @@ function handleEliminarItem_(body) {
     return jsonResponse_({ ok: true });
   } catch (err) {
     return jsonResponse_({ ok: false, error: String(err) });
+  } finally {
+    lock.releaseLock();
   }
 }
 
-/** Recibe una foto en base64 desde el panel, la guarda en Drive y devuelve la URL pública. */
+function handleGuardarCategoria_(body) {
+  if (!checkPin_(body)) return jsonResponse_({ ok: false, error: 'PIN incorrecto' });
+  const category = body.category || {};
+  const name = String(category.name || '').trim();
+  if (!name) return jsonResponse_({ ok: false, error: 'La categoría necesita un nombre.' });
+  const id = String(category.id || slugify_(name)).trim();
+  const sheet = getOrCreateCategorySheet_();
+  const lastRow = sheet.getLastRow();
+  let targetRow = -1;
+  if (lastRow >= 2) {
+    const ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (let i = 0; i < ids.length; i++) {
+      if (String(ids[i][0]).trim() === id) { targetRow = i + 2; break; }
+    }
+  }
+  const row = [id, name, Number(category.order) || lastRow, category.active === false ? 'No' : 'Sí'];
+  if (targetRow > 0) sheet.getRange(targetRow, 1, 1, CATEGORY_HEADERS.length).setValues([row]);
+  else sheet.appendRow(row);
+  return jsonResponse_({ ok: true, category: { id: id, name: name } });
+}
+
+function handleGuardarConfiguracion_(body) {
+  if (!checkPin_(body)) return jsonResponse_({ ok: false, error: 'PIN incorrecto' });
+  const settings = body.settings || {};
+  if (settings.heroImage) upsertSetting_('hero_image', settings.heroImage);
+  return jsonResponse_({ ok: true, settings: readSettings_() });
+}
+
+/** Recibe una foto en base64, la guarda en Drive y devuelve la URL pública. */
 function handleSubirImagen_(body) {
   if (!checkPin_(body)) return jsonResponse_({ ok: false, error: 'PIN incorrecto' });
   try {
@@ -165,8 +312,8 @@ function handleSubirImagen_(body) {
 }
 
 function getOrCreatePhotosFolder_() {
-  const it = DriveApp.getFoldersByName(CONFIG.DRIVE_FOLDER_NAME);
-  if (it.hasNext()) return it.next();
+  const iterator = DriveApp.getFoldersByName(CONFIG.DRIVE_FOLDER_NAME);
+  if (iterator.hasNext()) return iterator.next();
   return DriveApp.createFolder(CONFIG.DRIVE_FOLDER_NAME);
 }
 
@@ -178,75 +325,42 @@ function slugify_(text) {
     .replace(/(^-|-$)/g, '') || 'item';
 }
 
-/**
- * GET — tres usos:
- *  1) /exec                          → ping de salud.
- *  2) /exec?action=catalogo          → catálogo público (solo productos activos) para el sitio.
- *  3) /exec?action=catalogo_admin&pin=... → catálogo completo (incluye inactivos) para el panel.
- */
-function doGet(e) {
-  const p = (e && e.parameter) || {};
-  if (p.action === 'catalogo') {
-    return jsonResponse_({ ok: true, items: readCatalog_(false) });
-  }
-  if (p.action === 'catalogo_admin') {
-    if (p.pin !== CONFIG.ADMIN_PIN) return jsonResponse_({ ok: false, error: 'PIN incorrecto' });
-    return jsonResponse_({ ok: true, items: readCatalog_(true) });
-  }
-  return jsonResponse_({ ok: true, service: 'Cokoa Pedidos', status: 'activo' });
-}
-
-// ---------- Catálogo (panel de Manu) ----------
-
-const CATALOG_SHEET_NAME = 'Catálogo';
-const CATALOG_HEADERS = [
-  'ID', 'Categoría', 'Nombre', 'Descripción', 'Precio', 'Unidad', 'Foto (enlace de Drive)', 'Activo',
-];
-
-/** Semilla inicial: el catálogo actual del sitio, para que Manu lo encuentre ya cargado. */
-const CATALOG_SEED = [
-  ['baileys', 'Postre', 'Baileys', 'Crema de Baileys, chocolate y bizcocho de cacao.', 450, 'lata 300ml', '', 'Sí'],
-  ['chinola', 'Postre', 'Chinola', 'Crema de chinola con crocante de chocolate.', 450, 'lata 300ml', '', 'Sí'],
-  ['pistacho', 'Postre', 'Pistacho y Frambuesa', 'Crema de pistacho con frambuesa y crocante de chocolate.', 450, 'lata 300ml', '', 'Sí'],
-  ['pannacotta', 'Postre', 'Panna Cotta', 'Panna cotta cremosa con coulis de frutos rojos y galleta de vainilla.', 450, 'lata 300ml', '', 'Sí'],
-  ['dulceleche', 'Postre', 'Dulce de Leche y Café', 'Dulce de leche, crema de café y bizcocho de chocolate.', 450, 'lata 300ml', '', 'Sí'],
-  ['carrot', 'Postre', 'Carrot Cake', 'Bizcocho de zanahoria gluten free con crema de queso.', 450, 'lata 300ml', '', 'Sí'],
-  ['tresleches', 'Postre', 'Tres Leches', 'Bizcocho tres leches con crema suave.', 450, 'lata 300ml', '', 'Sí'],
-  ['avellanas', 'Postre', 'Chocolate y Avellanas', 'Mousse de chocolate y crema de avellanas.', 450, 'lata 300ml', '', 'Sí'],
-  ['oreo', 'Postre', 'Oreo', 'Crema de vainilla con galleta Oreo y trozos crujientes.', 450, 'lata 300ml', '', 'Sí'],
-  ['chocolate', 'Postre', 'Chocolate', 'Mousse de chocolate y bizcocho de cacao húmedo.', 450, 'lata 300ml', '', 'Sí'],
-  ['box4', 'Caja', 'Caja Descubre', '4 postres en lata a elección del chef.', 1700, 'caja de regalo', '', 'Sí'],
-  ['box6', 'Caja', 'Caja Comparte', '6 postres en lata surtidos, ideal para regalar.', 2450, 'caja de regalo', '', 'Sí'],
-  ['box9', 'Caja', 'Caja Celebra', '9 postres en lata + tarjeta personalizada.', 3500, 'caja de regalo', '', 'Sí'],
-  ['dominicana', 'Experiencia', 'Experiencia Dominicana', 'Café premium dominicano, dulces típicos y prepara tu propio chocolate caliente.', 1800, 'por persona', '', 'Sí'],
-  ['immersive', 'Experiencia', 'Cokoa Immersive Experience', 'Una propuesta inmersiva donde la gastronomía, la creatividad y los sabores te llevan a un viaje único.', 2500, 'por persona', '', 'Sí'],
-];
-
-function getOrCreateCatalogSheet_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName(CATALOG_SHEET_NAME);
-  if (!sheet) {
-    sheet = ss.insertSheet(CATALOG_SHEET_NAME);
-  }
+function prepareDataSheet_(name, headers, seed) {
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = spreadsheet.getSheetByName(name);
+  if (!sheet) sheet = spreadsheet.insertSheet(name);
   if (sheet.getLastRow() === 0) {
-    sheet.appendRow(CATALOG_HEADERS);
-    sheet.getRange(1, 1, 1, CATALOG_HEADERS.length)
-      .setFontWeight('bold').setBackground('#3A2718').setFontColor('#EFE3CC');
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    if (seed && seed.length) sheet.getRange(2, 1, seed.length, headers.length).setValues(seed);
     sheet.setFrozenRows(1);
-    sheet.getRange(2, 1, CATALOG_SEED.length, CATALOG_HEADERS.length).setValues(CATALOG_SEED);
-    sheet.autoResizeColumns(1, CATALOG_HEADERS.length);
+    sheet.autoResizeColumns(1, headers.length);
+  } else {
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
   }
+  sheet.getRange(1, 1, 1, headers.length)
+    .setFontWeight('bold').setBackground('#3A2718').setFontColor('#EFE3CC');
   return sheet;
 }
 
-/** Convierte un enlace para compartir de Google Drive en una URL de imagen directa. */
+function getOrCreateCatalogSheet_() {
+  return prepareDataSheet_(CATALOG_SHEET_NAME, CATALOG_HEADERS, CATALOG_SEED);
+}
+
+function getOrCreateCategorySheet_() {
+  return prepareDataSheet_(CATEGORY_SHEET_NAME, CATEGORY_HEADERS, CATEGORY_SEED);
+}
+
+function getOrCreateSettingsSheet_() {
+  return prepareDataSheet_(SETTINGS_SHEET_NAME, SETTINGS_HEADERS, SETTINGS_SEED);
+}
+
 function driveLinkToImageUrl_(link) {
   if (!link) return '';
   const trimmed = String(link).trim();
   if (!trimmed) return '';
-  const m = trimmed.match(/\/d\/([a-zA-Z0-9_-]{10,})/) || trimmed.match(/[?&]id=([a-zA-Z0-9_-]{10,})/);
-  if (m) return 'https://drive.google.com/uc?export=view&id=' + m[1];
-  return trimmed; // ya es una URL de imagen directa (ej. subida a otro sitio)
+  const match = trimmed.match(/\/d\/([a-zA-Z0-9_-]{10,})/) || trimmed.match(/[?&]id=([a-zA-Z0-9_-]{10,})/);
+  if (match) return 'https://drive.google.com/uc?export=view&id=' + match[1];
+  return trimmed;
 }
 
 function readCatalog_(includeInactive) {
@@ -255,60 +369,97 @@ function readCatalog_(includeInactive) {
   if (lastRow < 2) return [];
   const rows = sheet.getRange(2, 1, lastRow - 1, CATALOG_HEADERS.length).getValues();
   return rows
-    .filter(function (r) {
-      if (!r[0]) return false;
-      if (includeInactive) return true;
-      return String(r[7]).trim().toLowerCase() !== 'no';
+    .filter(function (row) {
+      if (!row[0]) return false;
+      return includeInactive || String(row[7]).trim().toLowerCase() !== 'no';
     })
-    .map(function (r) {
+    .map(function (row) {
+      const stock = row[8] === '' || row[8] === null ? null : Math.max(0, Math.floor(Number(row[8]) || 0));
       return {
-        id: String(r[0]).trim(),
-        category: String(r[1]).trim(), // Postre | Caja | Experiencia
-        name: String(r[2]).trim(),
-        desc: String(r[3]).trim(),
-        price: Number(r[4]) || 0,
-        unit: String(r[5]).trim(),
-        image: driveLinkToImageUrl_(r[6]),
-        rawImage: String(r[6] || ''),
-        active: String(r[7]).trim().toLowerCase() !== 'no',
+        id: String(row[0]).trim(),
+        category: String(row[1]).trim(),
+        name: String(row[2]).trim(),
+        desc: String(row[3]).trim(),
+        price: Number(row[4]) || 0,
+        unit: String(row[5]).trim(),
+        image: driveLinkToImageUrl_(row[6]),
+        rawImage: String(row[6] || ''),
+        active: String(row[7]).trim().toLowerCase() !== 'no',
+        stock: stock,
+        offerActive: String(row[9]).trim().toLowerCase() === 'sí' || String(row[9]).trim().toLowerCase() === 'si',
+        offerPrice: Number(row[10]) || 0,
       };
     });
 }
 
-// ---------- helpers ----------
-
-function getOrCreateSheet_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName(CONFIG.SHEET_NAME);
-  if (!sheet) {
-    sheet = ss.insertSheet(CONFIG.SHEET_NAME);
-  }
-  if (sheet.getLastRow() === 0) {
-    sheet.appendRow(HEADERS);
-    sheet.getRange(1, 1, 1, HEADERS.length).setFontWeight('bold').setBackground('#3A2718').setFontColor('#EFE3CC');
-    sheet.setFrozenRows(1);
-  }
-  return sheet;
+function readCategories_(includeInactive) {
+  const sheet = getOrCreateCategorySheet_();
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  return sheet.getRange(2, 1, lastRow - 1, CATEGORY_HEADERS.length).getValues()
+    .filter(function (row) {
+      if (!row[0] || !row[1]) return false;
+      return includeInactive || String(row[3]).trim().toLowerCase() !== 'no';
+    })
+    .map(function (row) {
+      return {
+        id: String(row[0]).trim(),
+        name: String(row[1]).trim(),
+        order: Number(row[2]) || 999,
+        active: String(row[3]).trim().toLowerCase() !== 'no',
+      };
+    })
+    .sort(function (a, b) { return a.order - b.order; });
 }
 
-/** ID secuencial: CW-1001, CW-1002... basado en el último ID registrado. */
+function readSettings_() {
+  const sheet = getOrCreateSettingsSheet_();
+  const lastRow = sheet.getLastRow();
+  const settings = { heroImage: '/hero.webp' };
+  if (lastRow < 2) return settings;
+  const rows = sheet.getRange(2, 1, lastRow - 1, SETTINGS_HEADERS.length).getValues();
+  rows.forEach(function (row) {
+    if (String(row[0]).trim() === 'hero_image' && row[1]) settings.heroImage = driveLinkToImageUrl_(row[1]);
+  });
+  return settings;
+}
+
+function upsertSetting_(key, value) {
+  const sheet = getOrCreateSettingsSheet_();
+  const lastRow = sheet.getLastRow();
+  if (lastRow >= 2) {
+    const keys = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (let i = 0; i < keys.length; i++) {
+      if (String(keys[i][0]).trim() === key) {
+        sheet.getRange(i + 2, 2).setValue(value);
+        return;
+      }
+    }
+  }
+  sheet.appendRow([key, value]);
+}
+
+function getOrCreateSheet_() {
+  return prepareDataSheet_(CONFIG.SHEET_NAME, HEADERS, []);
+}
+
 function nextOrderId_(sheet) {
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return CONFIG.ORDER_PREFIX + '1001';
   const lastId = String(sheet.getRange(lastRow, 1).getValue());
-  const num = parseInt(lastId.replace(CONFIG.ORDER_PREFIX, ''), 10);
-  return CONFIG.ORDER_PREFIX + (isNaN(num) ? '1001' : num + 1);
+  const number = parseInt(lastId.replace(CONFIG.ORDER_PREFIX, ''), 10);
+  return CONFIG.ORDER_PREFIX + (isNaN(number) ? '1001' : number + 1);
 }
 
-function fmtRD_(n) {
-  return 'RD$' + Number(n || 0).toLocaleString('es-DO');
+function fmtRD_(number) {
+  return 'RD$' + Number(number || 0).toLocaleString('es-DO');
 }
 
 function orderSummaryHtml_(orderId, data) {
   const rows = (data.items || [])
-    .map(function (i) {
-      return '<tr><td style="padding:6px 12px;">' + i.qty + '× ' + i.name +
-        '</td><td style="padding:6px 12px; text-align:right;">' + fmtRD_(i.price * i.qty) + '</td></tr>';
+    .map(function (item) {
+      return '<tr><td style="padding:6px 12px;">' + item.qty + '× ' + item.name +
+        '</td><td style="padding:6px 12px; text-align:right;">' + fmtRD_(item.price * item.qty) + '</td></tr>';
     })
     .join('');
 
@@ -365,44 +516,35 @@ function sendBusinessAlert_(orderId, data, itemsText) {
   }
 }
 
-function jsonResponse_(obj) {
-  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+function jsonResponse_(object) {
+  return ContentService.createTextOutput(JSON.stringify(object)).setMimeType(ContentService.MimeType.JSON);
 }
 
-/** Prueba manual: ejecuta esta función desde el editor para simular un pedido. */
 function testPedido() {
   const fake = {
     postData: {
       contents: JSON.stringify({
         name: 'Cliente de Prueba',
         phone: '+1 809 555 0000',
-        email: '', // pon tu correo aquí para probar el email al cliente
-        items: [
-          { id: 'baileys', name: 'Baileys', qty: 2, price: 450, unit: 'lata 300ml' },
-          { id: 'box4', name: 'Caja Descubre', qty: 1, price: 1700, unit: 'caja de regalo' },
-        ],
-        subtotal: 2600,
+        email: '',
+        items: [{ id: 'baileys', name: 'Baileys', qty: 1, price: 450, unit: 'lata 300ml' }],
+        subtotal: 450,
         deliveryFee: 150,
-        total: 2750,
+        total: 600,
         method: 'delivery',
         zone: 'ciudad',
         methodLabel: 'Delivery (Bávaro · Punta Cana)',
         deliveryFeeLabel: 'RD$150',
         address: 'Calle de Prueba #1, Bávaro',
-        date: '2026-08-05',
+        date: '2026-08-27',
         payment: 'transferencia',
-        notes: 'Pedido de prueba — ignorar',
+        notes: 'Pedido de prueba - ignorar',
       }),
     },
   };
-  const result = doPost(fake);
-  Logger.log(result.getContent());
+  Logger.log(doPost(fake).getContent());
 }
 
-/**
- * Autorizacion inicial: ejecuta esta funcion una vez desde el editor de Apps
- * Script y acepta los permisos de Sheets, Drive y correo antes de publicar.
- */
 function authorizeServices() {
   SpreadsheetApp.getActiveSpreadsheet().getName();
   getOrCreatePhotosFolder_().getName();

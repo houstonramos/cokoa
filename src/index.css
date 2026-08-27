@@ -53,6 +53,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--dorado); outlin
   padding: 9px 16px;
   font-weight: 400;
 }
+.announcement-mobile { display: none; }
 
 /* ---------- nav ---------- */
 .nav {
@@ -623,10 +624,89 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--dorado); outlin
 }
 
 @media (max-width: 600px) {
-  .nav-logo { height: 36px; }
-  .btn-cart { padding: 9px 13px; font-size: 10.5px; }
-  .hero { margin-top: 35px; }
-  .catalog-section .section-title { font-size: 34px; }
+  .announcement {
+    padding: 6px 12px;
+    font-size: 9px;
+    letter-spacing: 1.25px;
+    line-height: 1.25;
+    white-space: nowrap;
+  }
+  .announcement-desktop { display: none; }
+  .announcement-mobile { display: inline; }
+
+  .nav {
+    flex-wrap: nowrap;
+    min-height: 50px;
+    padding: 7px 14px;
+  }
+  .nav-logo { height: 31px; }
+  .nav-right { flex: 0 1 auto; }
+  .btn-cart {
+    gap: 7px;
+    padding: 7px 11px 7px 13px;
+    font-size: 9.5px;
+    letter-spacing: 1.25px;
+  }
+  .btn-cart-count { min-width: 19px; height: 19px; padding: 0 5px; font-size: 10px; }
+  .nav-links {
+    gap: 18px;
+    padding: 8px 14px;
+    font-size: 9.5px;
+    letter-spacing: 1.25px;
+  }
+
+  .hero {
+    position: relative;
+    display: block;
+    min-height: 292px;
+    margin-top: 33px;
+    overflow: hidden;
+    isolation: isolate;
+  }
+  .hero-copy {
+    position: relative;
+    z-index: 2;
+    min-height: 292px;
+    justify-content: flex-end;
+    padding: 30px 22px 27px;
+    background: linear-gradient(90deg, rgba(239, 227, 204, 0.98) 0%, rgba(239, 227, 204, 0.92) 53%, rgba(239, 227, 204, 0.28) 100%);
+  }
+  .hero-eyebrow {
+    max-width: 245px;
+    margin-bottom: 10px;
+    font-size: 9px;
+    letter-spacing: 2.8px;
+    line-height: 1.4;
+  }
+  .hero-title {
+    max-width: 310px;
+    font-size: clamp(36px, 10.5vw, 44px);
+    line-height: 0.9;
+    letter-spacing: -0.7px;
+  }
+  .hero-lede, .hero-badges, .hero-ctas .btn-outline { display: none; }
+  .hero-ctas { margin-top: 20px; }
+  .hero-ctas .btn-primary {
+    padding: 11px 20px;
+    font-size: 10px;
+    letter-spacing: 1.6px;
+  }
+  .hero-photo {
+    position: absolute;
+    z-index: 1;
+    inset: 0;
+    min-height: 0;
+  }
+  .hero-photo img { object-position: 62% center; }
+
+  .catalog-section {
+    padding: 38px 14px 46px;
+    scroll-margin-top: 90px;
+  }
+  .catalog-section .section-eyebrow { font-size: 9px; letter-spacing: 3px; }
+  .catalog-section .section-title { margin-top: 5px; font-size: 31px; }
+  .catalog-lede { margin-top: 8px; font-size: 12.5px; line-height: 1.45; }
+  .catalog-section .postres-grid { margin-top: 22px; }
   .postres-grid { grid-template-columns: 1fr; }
   .admin-hero-preview { min-height: 210px; }
   .admin-hero-copy h1 { font-size: 30px; }

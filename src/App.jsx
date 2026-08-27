@@ -118,7 +118,10 @@ export default function App() {
   return (
     <div className="page">
       <div className="announcement">
-        Delivery en Bávaro · Punta Cana &nbsp;—&nbsp; fuera de la ciudad, entregas por agenda
+        <span className="announcement-desktop">
+          Delivery en Bávaro · Punta Cana &nbsp;—&nbsp; fuera de la ciudad, entregas por agenda
+        </span>
+        <span className="announcement-mobile">Delivery Bávaro · Punta Cana · Otras zonas por agenda</span>
       </div>
 
       <nav className="nav">

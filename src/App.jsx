@@ -53,6 +53,7 @@ const CATEGORY_COPY = {
 export default function App() {
   const [cart, setCart] = useState([]);
   const [open, setOpen] = useState(false);
+  const [cartNotice, setCartNotice] = useState(null);
   const [catalog, setCatalog] = useState(getInitialCatalog);
 
   useEffect(() => {
@@ -70,6 +71,12 @@ export default function App() {
     return () => { active = false; };
   }, []);
 
+  useEffect(() => {
+    if (!cartNotice) return undefined;
+    const timer = window.setTimeout(() => setCartNotice(null), 3600);
+    return () => window.clearTimeout(timer);
+  }, [cartNotice]);
+
   const groups = catalog.categories
     .filter((category) => category.active !== false)
     .map((category) => ({
@@ -82,6 +89,11 @@ export default function App() {
 
   const addToCart = (item) => {
     if (isSoldOut(item)) return;
+    const currentLine = cart.find((line) => line.id === item.id);
+    if (item.stock !== null && (currentLine?.qty || 0) >= item.stock) {
+      setCartNotice({ id: `${item.id}-${Date.now()}`, name: item.name, status: 'limit' });
+      return;
+    }
     const price = itemPrice(item);
     setCart((prev) => {
       const index = prev.findIndex((line) => line.id === item.id);
@@ -101,7 +113,7 @@ export default function App() {
         qty: 1,
       }];
     });
-    setOpen(true);
+    setCartNotice({ id: `${item.id}-${Date.now()}`, name: item.name, status: 'added' });
   };
 
   const changeQty = (id, delta) => setCart((prev) => prev
@@ -135,7 +147,10 @@ export default function App() {
             ))}
             <a href="#contacto">Contacto</a>
           </div>
-          <button className="btn-cart" onClick={() => setOpen(true)}>
+          <button
+            className={`btn-cart${cartNotice?.status === 'added' ? ' is-updated' : ''}`}
+            onClick={() => { setOpen(true); setCartNotice(null); }}
+          >
             Carrito <span className="btn-cart-count">{cartCount}</span>
           </button>
         </div>
@@ -214,6 +229,20 @@ export default function App() {
         changeQty={changeQty}
         resetCart={() => setCart([])}
       />
+
+      {cartNotice && (
+        <div className={`cart-notice cart-notice-${cartNotice.status}`} role="status" aria-live="polite">
+          <div className="cart-notice-copy">
+            <strong>{cartNotice.status === 'added' ? 'Agregado al carrito' : 'Cantidad máxima alcanzada'}</strong>
+            <span>{cartNotice.name}</span>
+          </div>
+          {cartNotice.status === 'added' && (
+            <button onClick={() => { setOpen(true); setCartNotice(null); }}>
+              Ver carrito · {cartCount}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

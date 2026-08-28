@@ -181,6 +181,10 @@ export default function App() {
             item={{ name: 'Selección Cokoa', image: catalog.settings.heroImage }}
             priority
             sizes="(max-width: 900px) 100vw, 50vw"
+            imageStyle={{
+              objectPosition: `${catalog.settings.heroPositionX}% ${catalog.settings.heroPositionY}%`,
+              transform: `scale(${catalog.settings.heroZoom})`,
+            }}
           />
         </div>
       </section>
@@ -354,7 +358,7 @@ function displayUnit(value) {
     .toUpperCase();
 }
 
-function CatalogImage({ item, priority = false, sizes }) {
+function CatalogImage({ item, priority = false, sizes, imageStyle }) {
   const [failed, setFailed] = useState(false);
   const image = item.image || '';
 
@@ -371,6 +375,7 @@ function CatalogImage({ item, priority = false, sizes }) {
       loading={priority ? 'eager' : 'lazy'}
       fetchPriority={priority ? 'high' : 'auto'}
       decoding="async"
+      style={imageStyle}
       onError={() => setFailed(true)}
     />
   );

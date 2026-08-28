@@ -60,7 +60,12 @@ const CATEGORY_SEED = [
 
 const SETTINGS_SHEET_NAME = 'Configuración';
 const SETTINGS_HEADERS = ['Clave', 'Valor'];
-const SETTINGS_SEED = [['hero_image', '/hero.webp']];
+const SETTINGS_SEED = [
+  ['hero_image', '/hero.webp'],
+  ['hero_position_x', 50],
+  ['hero_position_y', 50],
+  ['hero_zoom', 1],
+];
 
 function doPost(e) {
   try {
@@ -292,6 +297,15 @@ function handleGuardarConfiguracion_(body) {
   if (!checkPin_(body)) return jsonResponse_({ ok: false, error: 'PIN incorrecto' });
   const settings = body.settings || {};
   if (settings.heroImage) upsertSetting_('hero_image', settings.heroImage);
+  if (Object.prototype.hasOwnProperty.call(settings, 'heroPositionX')) {
+    upsertSetting_('hero_position_x', clampNumber_(settings.heroPositionX, 0, 100, 50));
+  }
+  if (Object.prototype.hasOwnProperty.call(settings, 'heroPositionY')) {
+    upsertSetting_('hero_position_y', clampNumber_(settings.heroPositionY, 0, 100, 50));
+  }
+  if (Object.prototype.hasOwnProperty.call(settings, 'heroZoom')) {
+    upsertSetting_('hero_zoom', clampNumber_(settings.heroZoom, 1, 1.8, 1));
+  }
   return jsonResponse_({ ok: true, settings: readSettings_() });
 }
 
@@ -415,13 +429,22 @@ function readCategories_(includeInactive) {
 function readSettings_() {
   const sheet = getOrCreateSettingsSheet_();
   const lastRow = sheet.getLastRow();
-  const settings = { heroImage: '/hero.webp' };
+  const settings = { heroImage: '/hero.webp', heroPositionX: 50, heroPositionY: 50, heroZoom: 1 };
   if (lastRow < 2) return settings;
   const rows = sheet.getRange(2, 1, lastRow - 1, SETTINGS_HEADERS.length).getValues();
   rows.forEach(function (row) {
-    if (String(row[0]).trim() === 'hero_image' && row[1]) settings.heroImage = driveLinkToImageUrl_(row[1]);
+    const key = String(row[0]).trim();
+    if (key === 'hero_image' && row[1]) settings.heroImage = driveLinkToImageUrl_(row[1]);
+    if (key === 'hero_position_x') settings.heroPositionX = clampNumber_(row[1], 0, 100, 50);
+    if (key === 'hero_position_y') settings.heroPositionY = clampNumber_(row[1], 0, 100, 50);
+    if (key === 'hero_zoom') settings.heroZoom = clampNumber_(row[1], 1, 1.8, 1);
   });
   return settings;
+}
+
+function clampNumber_(value, min, max, fallback) {
+  const number = Number(value);
+  return isFinite(number) ? Math.min(max, Math.max(min, number)) : fallback;
 }
 
 function upsertSetting_(key, value) {

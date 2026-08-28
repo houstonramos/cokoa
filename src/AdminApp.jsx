@@ -13,9 +13,11 @@ import {
 } from './lib/admin';
 import {
   DEFAULT_CATEGORIES,
+  DEFAULT_HERO_SETTINGS,
   hasOffer,
   normalizeCategoryName,
   normalizeDriveImageUrl,
+  normalizeHeroSettings,
   slugifyCategory,
 } from './lib/catalog';
 
@@ -77,11 +79,12 @@ export default function AdminApp() {
 
   const [items, setItems] = useState(null);
   const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
-  const [settings, setSettings] = useState({ heroImage: '/hero.webp' });
+  const [settings, setSettings] = useState({ ...DEFAULT_HERO_SETTINGS });
   const [newCategory, setNewCategory] = useState('');
   const [loadError, setLoadError] = useState('');
   const [savingId, setSavingId] = useState(null);
   const [heroUploading, setHeroUploading] = useState(false);
+  const [heroSaving, setHeroSaving] = useState(false);
   const [toast, setToast] = useState('');
 
   useEffect(() => {
@@ -106,7 +109,7 @@ export default function AdminApp() {
     const nextItems = (Array.isArray(res.items) ? res.items : []).map(normalizeAdminItem);
     setItems(nextItems);
     setCategories(normalizeCategories(res.categories, nextItems));
-    setSettings({ heroImage: (res.settings && (res.settings.heroImage || res.settings.hero_image)) || '/hero.webp' });
+    setSettings(normalizeHeroSettings(res.settings));
   };
 
   const doLogin = async (event) => {
@@ -239,18 +242,31 @@ export default function AdminApp() {
         showToast('No se pudo subir la portada: ' + (upload.error || 'intenta de nuevo'));
         return;
       }
-      const saved = await saveSettings(pin, { heroImage: upload.url });
+      const nextSettings = { ...settings, heroImage: upload.url };
+      const saved = await saveSettings(pin, nextSettings);
       if (!saved.ok) {
         showToast('La imagen subió, pero no se pudo guardar como portada.');
         return;
       }
-      setSettings({ heroImage: upload.url });
-      showToast('Portada actualizada.');
+      setSettings(normalizeHeroSettings(saved.settings || nextSettings));
+      showToast('Portada actualizada. Ajusta el encuadre si lo necesitas.');
     } catch (error) {
       showToast('No se pudo actualizar la portada: ' + (error && error.message ? error.message : 'intenta de nuevo'));
     } finally {
       setHeroUploading(false);
     }
+  };
+
+  const saveHeroFraming = async () => {
+    setHeroSaving(true);
+    const saved = await saveSettings(pin, settings);
+    setHeroSaving(false);
+    if (!saved.ok) {
+      showToast('No se pudo guardar el encuadre: ' + (saved.error || 'intenta de nuevo'));
+      return;
+    }
+    setSettings(normalizeHeroSettings(saved.settings || settings));
+    showToast('Encuadre de portada guardado.');
   };
 
   if (checking) return <div className="admin-shell"><p className="admin-loading">Cargando…</p></div>;
@@ -290,7 +306,14 @@ export default function AdminApp() {
       <main className="admin-main">
         <section className="admin-hero-editor">
           <div className="admin-hero-preview">
-            <img src={normalizeDriveImageUrl(settings.heroImage, 1280)} alt="Portada actual" />
+            <img
+              src={normalizeDriveImageUrl(settings.heroImage, 1280)}
+              alt="Portada actual"
+              style={{
+                objectPosition: `${settings.heroPositionX}% ${settings.heroPositionY}%`,
+                transform: `scale(${settings.heroZoom})`,
+              }}
+            />
             {heroUploading && <div className="admin-photo-uploading">Subiendo portada…</div>}
             <ImagePicker
               className="admin-hero-photo-btn"
@@ -301,7 +324,51 @@ export default function AdminApp() {
           <div className="admin-hero-copy">
             <span>Imagen principal</span>
             <h1>Portada de la tienda</h1>
-            <p>Cámbiala aquí cuando quieras. Se actualizará en el inicio sin tocar el código de la web.</p>
+            <p>Cámbiala y ajusta el recorte sin modificar la foto original.</p>
+            <div className="admin-hero-crop">
+              <label>
+                <span>Horizontal <b>{Math.round(settings.heroPositionX)}%</b></span>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={settings.heroPositionX}
+                  onChange={(event) => setSettings((current) => ({ ...current, heroPositionX: Number(event.target.value) }))}
+                />
+              </label>
+              <label>
+                <span>Vertical <b>{Math.round(settings.heroPositionY)}%</b></span>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={settings.heroPositionY}
+                  onChange={(event) => setSettings((current) => ({ ...current, heroPositionY: Number(event.target.value) }))}
+                />
+              </label>
+              <label>
+                <span>Zoom <b>{Math.round(settings.heroZoom * 100)}%</b></span>
+                <input
+                  type="range"
+                  min="100"
+                  max="180"
+                  value={Math.round(settings.heroZoom * 100)}
+                  onChange={(event) => setSettings((current) => ({ ...current, heroZoom: Number(event.target.value) / 100 }))}
+                />
+              </label>
+              <div className="admin-hero-crop-actions">
+                <button
+                  type="button"
+                  className="admin-hero-reset"
+                  onClick={() => setSettings((current) => ({ ...current, heroPositionX: 50, heroPositionY: 50, heroZoom: 1 }))}
+                >
+                  Centrar
+                </button>
+                <button type="button" className="admin-hero-save" onClick={saveHeroFraming} disabled={heroSaving}>
+                  {heroSaving ? 'Guardando…' : 'Guardar encuadre'}
+                </button>
+              </div>
+            </div>
           </div>
         </section>
 

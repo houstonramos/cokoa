@@ -4,6 +4,13 @@ const ENDPOINT = import.meta.env.VITE_ORDERS_ENDPOINT || '';
 const CATALOG_CACHE_KEY = 'cokoa_live_catalog_v2';
 const DRIVE_IMAGE_WIDTHS = [480, 720, 960, 1280];
 
+export const DEFAULT_HERO_SETTINGS = {
+  heroImage: '/hero.webp',
+  heroPositionX: 50,
+  heroPositionY: 50,
+  heroZoom: 1,
+};
+
 export const DEFAULT_CATEGORIES = [
   { id: 'latas', name: 'Latas', order: 1, active: true },
   { id: 'postres', name: 'Postres', order: 2, active: true },
@@ -23,7 +30,7 @@ const STATIC_ITEMS = [
 const fallbackCatalog = () => ({
   items: STATIC_ITEMS.map((item) => ({ ...item, stock: null, offerActive: false, offerPrice: 0, active: true })),
   categories: DEFAULT_CATEGORIES,
-  settings: { heroImage: '/hero.webp' },
+  settings: { ...DEFAULT_HERO_SETTINGS },
   live: false,
 });
 
@@ -156,10 +163,18 @@ function mapCategories(values, items) {
   return categories.sort((a, b) => a.order - b.order);
 }
 
-function mapSettings(settings) {
+function clamp(value, min, max, fallback) {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.min(max, Math.max(min, number)) : fallback;
+}
+
+export function normalizeHeroSettings(settings) {
   const value = settings && typeof settings === 'object' ? settings : {};
   return {
-    heroImage: normalizeDriveImageUrl(value.heroImage || value.hero_image || '/hero.webp', 1280),
+    heroImage: normalizeDriveImageUrl(value.heroImage || value.hero_image || DEFAULT_HERO_SETTINGS.heroImage, 1280),
+    heroPositionX: clamp(value.heroPositionX ?? value.hero_position_x, 0, 100, DEFAULT_HERO_SETTINGS.heroPositionX),
+    heroPositionY: clamp(value.heroPositionY ?? value.hero_position_y, 0, 100, DEFAULT_HERO_SETTINGS.heroPositionY),
+    heroZoom: clamp(value.heroZoom ?? value.hero_zoom, 1, 1.8, DEFAULT_HERO_SETTINGS.heroZoom),
   };
 }
 
@@ -205,7 +220,7 @@ export async function fetchCatalog() {
     const catalog = {
       items,
       categories: mapCategories(data.categories, items),
-      settings: mapSettings(data.settings),
+      settings: normalizeHeroSettings(data.settings),
       live: true,
     };
     cacheCatalog(catalog);

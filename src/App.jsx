@@ -187,7 +187,14 @@ export default function App() {
 
       <main id="catalogo">
         {groups.map((group, groupIndex) => (
-          <CatalogSection key={group.id} group={group} groupIndex={groupIndex} addToCart={addToCart} />
+          <CatalogSection
+            key={group.id}
+            group={group}
+            groupIndex={groupIndex}
+            cart={cart}
+            addToCart={addToCart}
+            changeQty={changeQty}
+          />
         ))}
       </main>
 
@@ -247,7 +254,7 @@ export default function App() {
   );
 }
 
-function CatalogSection({ group, groupIndex, addToCart }) {
+function CatalogSection({ group, groupIndex, cart, addToCart, changeQty }) {
   const slug = slugifyCategory(group.name);
   const copy = CATEGORY_COPY[slug] || {
     eyebrow: 'Colección Cokoa',
@@ -270,7 +277,9 @@ function CatalogSection({ group, groupIndex, addToCart }) {
             key={item.id}
             item={item}
             priority={groupIndex === 0 && index === 0}
+            quantity={cart.find((line) => line.id === item.id)?.qty || 0}
             addToCart={addToCart}
+            changeQty={changeQty}
           />
         ))}
       </div>
@@ -278,13 +287,14 @@ function CatalogSection({ group, groupIndex, addToCart }) {
   );
 }
 
-function ProductCard({ item, priority, addToCart }) {
+function ProductCard({ item, priority, quantity, addToCart, changeQty }) {
   const soldOut = isSoldOut(item);
   const offered = hasOffer(item);
   const unit = displayUnit(item.unit);
+  const reachedStockLimit = item.stock !== null && quantity >= item.stock;
 
   return (
-    <article className={`product-card${soldOut ? ' product-card-soldout' : ''}`}>
+    <article className={`product-card${soldOut ? ' product-card-soldout' : ''}${quantity > 0 ? ' product-card-selected' : ''}`}>
       <div className="product-photo">
         <CatalogImage
           item={item}
@@ -305,14 +315,28 @@ function ProductCard({ item, priority, addToCart }) {
             {offered && <span className="product-price-old">{fmt(item.price)}</span>}
             <span className="product-price">{fmt(itemPrice(item))}</span>
           </div>
-          <button
-            className="btn-add"
-            onClick={() => addToCart(item)}
-            aria-label={soldOut ? `${item.name} agotado` : `Agregar ${item.name}`}
-            disabled={soldOut}
-          >
-            {soldOut ? '×' : '+'}
-          </button>
+          {quantity > 0 ? (
+            <div className="product-quantity" aria-label={`${quantity} ${quantity === 1 ? 'unidad' : 'unidades'} de ${item.name} en el carrito`}>
+              <button onClick={() => changeQty(item.id, -1)} aria-label={`Quitar una unidad de ${item.name}`}>−</button>
+              <span><strong>{quantity}</strong><small>en carrito</small></span>
+              <button
+                onClick={() => addToCart(item)}
+                aria-label={`Agregar otra unidad de ${item.name}`}
+                disabled={reachedStockLimit}
+              >
+                +
+              </button>
+            </div>
+          ) : (
+            <button
+              className="btn-add"
+              onClick={() => addToCart(item)}
+              aria-label={soldOut ? `${item.name} agotado` : `Agregar ${item.name}`}
+              disabled={soldOut}
+            >
+              {soldOut ? '×' : '+'}
+            </button>
+          )}
         </div>
         {item.stock !== null && !soldOut && item.stock <= 5 && (
           <p className="product-low-stock">Solo quedan {item.stock}</p>

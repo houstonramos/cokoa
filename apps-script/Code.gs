@@ -8,7 +8,7 @@
 // ====== CONFIGURACION - edita estos valores en Google Apps Script ======
 const CONFIG = {
   SHEET_NAME: 'Pedidos',
-  BUSINESS_EMAIL: 'pedidos@tunegocio.com',
+  BUSINESS_EMAIL: 'cokoabychefmanurossi@gmail.com',
   BUSINESS_NAME: 'Cokoa by Chef Manu Rossi',
   ORDER_PREFIX: 'CK-',
   ADMIN_PIN: '1234',

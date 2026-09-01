@@ -510,6 +510,8 @@ function sendCustomerConfirmation_(orderId, data) {
   try {
     MailApp.sendEmail({
       to: data.email,
+      name: CONFIG.BUSINESS_NAME,
+      replyTo: CONFIG.BUSINESS_EMAIL,
       subject: '¡Pedido recibido! ' + orderId + ' — ' + CONFIG.BUSINESS_NAME,
       htmlBody:
         '<p style="font-family:sans-serif;">Hola ' + (data.name || '') + ', ¡gracias por tu pedido! 🍮</p>' +
@@ -525,6 +527,8 @@ function sendBusinessAlert_(orderId, data, itemsText) {
   try {
     MailApp.sendEmail({
       to: CONFIG.BUSINESS_EMAIL,
+      name: CONFIG.BUSINESS_NAME,
+      replyTo: data.email || CONFIG.BUSINESS_EMAIL,
       subject: '🔔 Nuevo pedido ' + orderId + ' — ' + fmtRD_(data.total) + ' — ' + (data.name || ''),
       htmlBody:
         '<p style="font-family:sans-serif;"><strong>Nuevo pedido recibido.</strong></p>' +

@@ -320,9 +320,9 @@ export default function AdminApp() {
       return;
     }
     const saved = normalizeAdminDeliveryZones([res.zone])[0];
-    setDeliveryZones((previous) => previous.map((current, zoneIndex) => (
-      zoneIndex === index ? { ...saved, _key: saved.id } : current
-    )));
+    setDeliveryZones((previous) => previous
+      .map((current, zoneIndex) => (zoneIndex === index ? { ...saved, _key: saved.id } : current))
+      .sort((a, b) => Number(a.order) - Number(b.order)));
     showToast('Zona de delivery guardada.');
   };
 

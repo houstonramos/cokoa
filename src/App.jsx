@@ -92,6 +92,9 @@ export default function App() {
     : deliveryZones.length === 1
       ? `Delivery en ${deliveryZones[0].name}`
       : `Delivery disponible en ${deliveryZones.length} zonas`;
+  const deliveryAnnouncement = deliveryZones.length
+    ? `${deliverySummary} — consulta la tarifa de tu zona al ordenar`
+    : deliverySummary;
 
   const addToCart = (item) => {
     if (isSoldOut(item)) return;
@@ -137,9 +140,11 @@ export default function App() {
     <div className="page">
       <div className="announcement">
         <span className="announcement-desktop">
-          {deliverySummary} &nbsp;—&nbsp; consulta la tarifa de tu zona al ordenar
+          {deliveryAnnouncement}
         </span>
-        <span className="announcement-mobile">{deliverySummary} · Consulta tu tarifa</span>
+        <span className="announcement-mobile">
+          {deliveryZones.length ? 'Delivery disponible · Consulta zonas y tarifas' : deliverySummary}
+        </span>
       </div>
 
       <nav className="nav">

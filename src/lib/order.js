@@ -4,7 +4,7 @@ export const fmt = (n) => 'RD$' + Number(n).toLocaleString('es-DO');
 // Etiquetas legibles para el pedido
 export const methodLabel = (method, zone) => {
   if (method === 'pickup') return 'Pickup en tienda';
-  return zone === 'ciudad' ? 'Delivery (Bávaro · Punta Cana)' : 'Delivery (fuera de la ciudad, por agenda)';
+  return zone ? `Delivery (${zone})` : 'Delivery';
 };
 
 const ENDPOINT = import.meta.env.VITE_ORDERS_ENDPOINT || '';
@@ -28,7 +28,7 @@ export async function submitOrder(payload) {
       body: JSON.stringify(payload),
     });
     const data = await res.json();
-    if (data && data.ok && data.orderId) return { ok: true, orderId: data.orderId };
+    if (data && data.ok && data.orderId) return { ...data, ok: true };
     if (data && data.error) return { ok: false, orderId: null, error: data.error };
     return { ok: false, orderId: fallbackId, offline: true };
   } catch (err) {
@@ -53,7 +53,7 @@ export function buildWhatsAppLink(order) {
     `${order.deliveryRowLabel}: ${order.deliveryFeeLabel}`,
     `*Total: ${fmt(order.total)}*`,
     '',
-    `*Entrega:* ${methodLabel(order.method, order.zone)}`,
+    `*Entrega:* ${order.methodLabel || methodLabel(order.method, order.zone)}`,
   ];
   if (order.method === 'delivery' && order.address) lines.push(`*Dirección:* ${order.address}`);
   if (order.date) lines.push(`*Fecha:* ${order.date}`);

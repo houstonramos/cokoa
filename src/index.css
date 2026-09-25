@@ -281,9 +281,11 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--dorado); outlin
   gap: 36px; text-align: center;
 }
 .delivery-title { font-family: var(--serif); font-size: 30px; color: #F1E6CF; }
+.delivery-price { margin-top: 8px; color: #D3AE65; font-size: 11px; font-weight: 600; letter-spacing: 1.4px; text-transform: uppercase; }
 .delivery-desc { font-size: 13.5px; font-weight: 300; color: #C1AD86; margin-top: 8px; line-height: 1.6; }
 .delivery-desc strong { color: #E8D8B8; font-weight: 500; }
-.delivery-mid { border-left: 1px solid #4A3A28; border-right: 1px solid #4A3A28; padding: 0 24px; }
+.delivery-option { padding: 0 18px; border-right: 1px solid #4A3A28; }
+.delivery-option:last-of-type { border-right: none; }
 
 /* ---------- footer ---------- */
 .footer { padding: 64px 48px 54px; text-align: center; }
@@ -362,6 +364,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--dorado); outlin
 .field-textarea { resize: vertical; margin-bottom: 22px; }
 .field-group-label { font-size: 12px; letter-spacing: 1px; text-transform: uppercase; color: var(--texto-mute); margin-bottom: 8px; }
 .choice-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 18px; }
+.choice-grid-delivery { display: grid; grid-template-columns: 1fr; gap: 8px; margin-bottom: 9px; }
 .choice-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 22px; }
 .choice-btn {
   padding: 13px; border-radius: 10px; cursor: pointer;
@@ -369,14 +372,20 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--dorado); outlin
   background: var(--crema-claro); color: var(--texto-suave); border: 1px solid var(--borde-input);
 }
 .choice-btn.zone { padding: 12px 10px; font-size: 12.5px; text-align: left; line-height: 1.3; }
+.choice-btn.zone strong { display: block; font-weight: 500; }
 .choice-btn.pay { padding: 11px 6px; font-size: 12px; }
 .choice-btn.active { background: var(--chocolate); color: #F1E6CF; border-color: var(--chocolate); }
+.choice-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .choice-sub { font-size: 11px; opacity: 0.7; }
+.delivery-zone-coverage { margin: 0 2px 5px; color: var(--texto-mute); font-size: 12px; line-height: 1.45; }
+.delivery-zone-minimum { margin: 0 2px 13px; color: var(--texto-suave); font-size: 11px; }
+.delivery-zone-minimum.is-missing { color: #A34A2D; font-weight: 600; }
 .summary-card { background: var(--crema); border-radius: 12px; padding: 16px 18px; margin-bottom: 18px; }
 .summary-row { display: flex; justify-content: space-between; font-size: 13.5px; color: var(--texto-suave); margin-bottom: 8px; }
 .summary-total { display: flex; justify-content: space-between; align-items: baseline; padding-top: 10px; border-top: 1px solid var(--borde-input); }
 .summary-total .label { font-size: 12px; letter-spacing: 1px; text-transform: uppercase; color: var(--chocolate); }
 .summary-total .value { font-family: var(--serif); font-size: 28px; color: var(--chocolate); }
+.summary-pending { margin-top: 9px; color: var(--texto-mute); font-size: 11px; line-height: 1.4; }
 .btn-confirm {
   width: 100%; background: var(--dorado); color: #fff; border: none;
   padding: 16px; border-radius: 999px;
@@ -638,6 +647,46 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--dorado); outlin
 .admin-hero-save { flex: 1; border: 1px solid #C6A66A; background: #C6A66A; color: #2E1F13; font-weight: 600; }
 .admin-hero-save:disabled { opacity: 0.55; cursor: wait; }
 
+.admin-delivery-manager {
+  background: #F7EDD9; border: 1px solid #D8C39D; border-radius: 18px;
+  padding: 26px; margin-bottom: 22px;
+}
+.admin-delivery-heading {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 20px;
+}
+.admin-delivery-heading h2 { font-family: var(--serif); font-size: 28px; color: var(--chocolate); }
+.admin-delivery-heading p { margin-top: 5px; color: var(--texto-mute); font-size: 12.5px; line-height: 1.5; }
+.admin-delivery-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.admin-delivery-card {
+  background: #FFFDF8; border: 1px solid var(--borde-card); border-radius: 14px;
+  padding: 17px; transition: opacity 160ms ease;
+}
+.admin-delivery-card.is-inactive { opacity: 0.58; }
+.admin-delivery-card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 13px; }
+.admin-delivery-card-head > span {
+  color: var(--dorado); font-size: 9.5px; font-weight: 600; letter-spacing: 1.8px; text-transform: uppercase;
+}
+.admin-delivery-card-head .admin-toggle { margin: 0; }
+.admin-delivery-field { display: grid; gap: 5px; margin-bottom: 10px; }
+.admin-delivery-field > span {
+  color: var(--texto-mute); font-size: 9.5px; font-weight: 500; letter-spacing: 0.7px; text-transform: uppercase;
+}
+.admin-delivery-field input, .admin-delivery-field textarea {
+  width: 100%; border: 1px solid var(--borde-input); border-radius: 8px;
+  background: #fff; color: var(--chocolate); padding: 9px 10px; font: inherit; font-size: 12.5px;
+}
+.admin-delivery-field textarea { resize: vertical; line-height: 1.4; }
+.admin-delivery-field input:disabled { background: #EEE8DC; color: #9D8A73; }
+.admin-delivery-name input { font-family: var(--serif); font-size: 18px; }
+.admin-delivery-row { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.admin-delivery-order { grid-template-columns: minmax(0, 1fr); }
+.admin-delivery-options {
+  display: flex; flex-wrap: wrap; gap: 8px 15px; padding: 3px 0 8px;
+  color: var(--texto-suave); font-size: 11.5px;
+}
+.admin-delivery-options label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.admin-delivery-options input, .admin-delivery-card-head input { accent-color: var(--dorado); }
+
 .admin-category-manager {
   display: grid; grid-template-columns: minmax(220px, 0.8fr) 1.4fr; gap: 28px; align-items: center;
   background: #FFF9EE; border: 1px solid var(--borde-card); border-radius: 16px;
@@ -794,6 +843,9 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--dorado); outlin
   .postres-grid { grid-template-columns: 1fr; }
   .admin-hero-preview { min-height: 330px; }
   .admin-hero-copy h1 { font-size: 30px; }
+  .admin-delivery-manager { padding: 20px; }
+  .admin-delivery-heading { align-items: stretch; flex-direction: column; }
+  .admin-delivery-grid, .admin-delivery-row { grid-template-columns: 1fr; }
   .admin-category-manager { padding: 20px; gap: 18px; }
   .admin-grid { grid-template-columns: 1fr; }
   .admin-commerce-row { grid-template-columns: 1fr; }

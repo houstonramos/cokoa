@@ -1,7 +1,7 @@
 import { PRODUCTS as STATIC_PRODUCTS, BOXES as STATIC_BOXES, EXPERIENCES as STATIC_EXPERIENCES } from '../data/catalog';
 
 const ENDPOINT = import.meta.env.VITE_ORDERS_ENDPOINT || '';
-const CATALOG_CACHE_KEY = 'cokoa_live_catalog_v2';
+const CATALOG_CACHE_KEY = 'cokoa_live_catalog_v3';
 const DRIVE_IMAGE_WIDTHS = [480, 720, 960, 1280];
 
 export const DEFAULT_HERO_SETTINGS = {
@@ -21,6 +21,33 @@ export const DEFAULT_CATEGORIES = [
   { id: 'experiencias', name: 'Experiencias', order: 7, active: true },
 ];
 
+export const DEFAULT_DELIVERY_ZONES = [
+  {
+    id: 'ciudad',
+    name: 'Bávaro · Punta Cana',
+    coverage: 'Delivery dentro de la ciudad.',
+    fee: 150,
+    minimum: 0,
+    eta: 'Mismo día',
+    requestDate: false,
+    quoteOnly: false,
+    order: 1,
+    active: true,
+  },
+  {
+    id: 'fuera',
+    name: 'Fuera de la ciudad',
+    coverage: 'Coordinamos la entrega contigo por WhatsApp.',
+    fee: 0,
+    minimum: 0,
+    eta: 'Por agenda',
+    requestDate: true,
+    quoteOnly: true,
+    order: 2,
+    active: true,
+  },
+];
+
 const STATIC_ITEMS = [
   ...STATIC_PRODUCTS.map((item) => ({ ...item, category: 'Latas' })),
   ...STATIC_BOXES.map((item) => ({ ...item, category: 'Cajas' })),
@@ -31,6 +58,7 @@ const fallbackCatalog = () => ({
   items: STATIC_ITEMS.map((item) => ({ ...item, stock: null, offerActive: false, offerPrice: 0, active: true })),
   categories: DEFAULT_CATEGORIES,
   settings: { ...DEFAULT_HERO_SETTINGS },
+  deliveryZones: DEFAULT_DELIVERY_ZONES.map((zone) => ({ ...zone })),
   live: false,
 });
 
@@ -178,6 +206,25 @@ export function normalizeHeroSettings(settings) {
   };
 }
 
+export function normalizeDeliveryZones(values, includeInactive = false) {
+  const source = Array.isArray(values) ? values : DEFAULT_DELIVERY_ZONES;
+  return source
+    .map((zone, index) => ({
+      id: String(zone.id || '').trim(),
+      name: String(zone.name || '').trim(),
+      coverage: String(zone.coverage || '').trim(),
+      fee: Math.max(0, Number(zone.fee) || 0),
+      minimum: Math.max(0, Number(zone.minimum) || 0),
+      eta: String(zone.eta || '').trim(),
+      requestDate: asBoolean(zone.requestDate, false),
+      quoteOnly: asBoolean(zone.quoteOnly, false),
+      order: Math.max(1, Math.floor(Number(zone.order) || index + 1)),
+      active: asBoolean(zone.active, true),
+    }))
+    .filter((zone) => zone.id && zone.name && (includeInactive || zone.active))
+    .sort((a, b) => a.order - b.order);
+}
+
 function isCatalog(value) {
   return value
     && Array.isArray(value.items)
@@ -221,6 +268,7 @@ export async function fetchCatalog() {
       items,
       categories: mapCategories(data.categories, items),
       settings: normalizeHeroSettings(data.settings),
+      deliveryZones: normalizeDeliveryZones(data.deliveryZones),
       live: true,
     };
     cacheCatalog(catalog);

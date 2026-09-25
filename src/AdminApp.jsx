@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   clearPin,
+  deleteDeliveryZone,
   deleteItem,
   fetchAdminCatalog,
   getSavedPin,
   login,
   saveCategory,
+  saveDeliveryZone,
   saveItem,
   savePin,
   saveSettings,
@@ -13,10 +15,12 @@ import {
 } from './lib/admin';
 import {
   DEFAULT_CATEGORIES,
+  DEFAULT_DELIVERY_ZONES,
   DEFAULT_HERO_SETTINGS,
   hasOffer,
   normalizeCategoryName,
   normalizeDriveImageUrl,
+  normalizeDeliveryZones,
   normalizeHeroSettings,
   slugifyCategory,
 } from './lib/catalog';
@@ -35,6 +39,28 @@ const emptyItem = (category = 'Latas') => ({
   offerActive: false,
   offerPrice: '',
 });
+
+const emptyDeliveryZone = (order) => ({
+  _key: `delivery-${Date.now()}-${order}`,
+  id: '',
+  name: '',
+  coverage: '',
+  fee: '',
+  minimum: '',
+  eta: '',
+  requestDate: false,
+  quoteOnly: false,
+  order,
+  active: true,
+});
+
+function normalizeAdminDeliveryZones(values) {
+  return normalizeDeliveryZones(values, true).map((zone, index) => ({
+    ...zone,
+    _key: zone.id || `delivery-${index}`,
+    minimum: zone.minimum || '',
+  }));
+}
 
 function fmt(n) {
   return 'RD$' + Number(n || 0).toLocaleString('es-DO');
@@ -80,11 +106,13 @@ export default function AdminApp() {
   const [items, setItems] = useState(null);
   const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
   const [settings, setSettings] = useState({ ...DEFAULT_HERO_SETTINGS });
+  const [deliveryZones, setDeliveryZones] = useState(() => normalizeAdminDeliveryZones(DEFAULT_DELIVERY_ZONES));
   const [newCategory, setNewCategory] = useState('');
   const [loadError, setLoadError] = useState('');
   const [savingId, setSavingId] = useState(null);
   const [heroUploading, setHeroUploading] = useState(false);
   const [heroSaving, setHeroSaving] = useState(false);
+  const [savingDeliveryId, setSavingDeliveryId] = useState(null);
   const [toast, setToast] = useState('');
 
   useEffect(() => {
@@ -110,6 +138,7 @@ export default function AdminApp() {
     setItems(nextItems);
     setCategories(normalizeCategories(res.categories, nextItems));
     setSettings(normalizeHeroSettings(res.settings));
+    setDeliveryZones(normalizeAdminDeliveryZones(res.deliveryZones));
   };
 
   const doLogin = async (event) => {
@@ -269,6 +298,48 @@ export default function AdminApp() {
     showToast('Encuadre de portada guardado.');
   };
 
+  const updateDeliveryZone = (index, patch) => setDeliveryZones((previous) => previous
+    .map((zone, zoneIndex) => (zoneIndex === index ? { ...zone, ...patch } : zone)));
+
+  const addDeliveryZone = () => setDeliveryZones((previous) => [
+    ...previous,
+    emptyDeliveryZone(previous.length + 1),
+  ]);
+
+  const saveDelivery = async (index) => {
+    const zone = deliveryZones[index];
+    if (!zone.name.trim()) {
+      showToast('Escribe el nombre de la zona.');
+      return;
+    }
+    setSavingDeliveryId(zone._key);
+    const res = await saveDeliveryZone(pin, zone);
+    setSavingDeliveryId(null);
+    if (!res.ok) {
+      showToast('No se pudo guardar la zona: ' + (res.error || 'intenta de nuevo'));
+      return;
+    }
+    const saved = normalizeAdminDeliveryZones([res.zone])[0];
+    setDeliveryZones((previous) => previous.map((current, zoneIndex) => (
+      zoneIndex === index ? { ...saved, _key: saved.id } : current
+    )));
+    showToast('Zona de delivery guardada.');
+  };
+
+  const removeDelivery = async (index) => {
+    const zone = deliveryZones[index];
+    if (!window.confirm(`¿Eliminar la zona "${zone.name || 'sin nombre'}"?`)) return;
+    if (zone.id) {
+      const res = await deleteDeliveryZone(pin, zone.id);
+      if (!res.ok) {
+        showToast('No se pudo eliminar la zona: ' + (res.error || 'intenta de nuevo'));
+        return;
+      }
+    }
+    setDeliveryZones((previous) => previous.filter((_, zoneIndex) => zoneIndex !== index));
+    showToast('Zona eliminada.');
+  };
+
   if (checking) return <div className="admin-shell"><p className="admin-loading">Cargando…</p></div>;
 
   if (!authed) {
@@ -369,6 +440,129 @@ export default function AdminApp() {
                 </button>
               </div>
             </div>
+          </div>
+        </section>
+
+        <section className="admin-delivery-manager">
+          <div className="admin-delivery-heading">
+            <div>
+              <span className="admin-section-kicker">Configuración del checkout</span>
+              <h2>Zonas de delivery</h2>
+              <p>Crea las zonas, define sus tarifas y decide cuáles aparecen para el cliente.</p>
+            </div>
+            <button type="button" className="btn-outline-small" onClick={addDeliveryZone}>+ Nueva zona</button>
+          </div>
+
+          <div className="admin-delivery-grid">
+            {deliveryZones.map((zone, index) => (
+              <article className={`admin-delivery-card${zone.active === false ? ' is-inactive' : ''}`} key={zone._key}>
+                <div className="admin-delivery-card-head">
+                  <span>Zona {index + 1}</span>
+                  <label className="admin-toggle">
+                    <input
+                      type="checkbox"
+                      checked={zone.active !== false}
+                      onChange={(event) => updateDeliveryZone(index, { active: event.target.checked })}
+                    />
+                    Visible
+                  </label>
+                </div>
+
+                <label className="admin-delivery-field admin-delivery-name">
+                  <span>Nombre de la zona</span>
+                  <input
+                    value={zone.name}
+                    onChange={(event) => updateDeliveryZone(index, { name: event.target.value })}
+                    placeholder="Ej. Cap Cana"
+                  />
+                </label>
+
+                <label className="admin-delivery-field">
+                  <span>Sectores o cobertura</span>
+                  <textarea
+                    rows={2}
+                    value={zone.coverage}
+                    onChange={(event) => updateDeliveryZone(index, { coverage: event.target.value })}
+                    placeholder="Describe los sectores incluidos"
+                  />
+                </label>
+
+                <div className="admin-delivery-row">
+                  <label className="admin-delivery-field">
+                    <span>Tarifa (RD$)</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={zone.fee}
+                      disabled={zone.quoteOnly}
+                      onChange={(event) => updateDeliveryZone(index, { fee: event.target.value })}
+                      placeholder="0"
+                    />
+                  </label>
+                  <label className="admin-delivery-field">
+                    <span>Pedido mínimo</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={zone.minimum}
+                      onChange={(event) => updateDeliveryZone(index, { minimum: event.target.value })}
+                      placeholder="Sin mínimo"
+                    />
+                  </label>
+                </div>
+
+                <div className="admin-delivery-row">
+                  <label className="admin-delivery-field">
+                    <span>Tiempo estimado</span>
+                    <input
+                      value={zone.eta}
+                      onChange={(event) => updateDeliveryZone(index, { eta: event.target.value })}
+                      placeholder="Ej. Mismo día"
+                    />
+                  </label>
+                  <label className="admin-delivery-field admin-delivery-order">
+                    <span>Orden</span>
+                    <input
+                      type="number"
+                      min="1"
+                      value={zone.order}
+                      onChange={(event) => updateDeliveryZone(index, { order: event.target.value })}
+                    />
+                  </label>
+                </div>
+
+                <div className="admin-delivery-options">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={zone.quoteOnly === true}
+                      onChange={(event) => updateDeliveryZone(index, { quoteOnly: event.target.checked })}
+                    />
+                    Precio por cotizar
+                  </label>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={zone.requestDate === true}
+                      onChange={(event) => updateDeliveryZone(index, { requestDate: event.target.checked })}
+                    />
+                    Solicitar fecha
+                  </label>
+                </div>
+
+                <div className="admin-card-actions">
+                  <button
+                    type="button"
+                    className="btn-dark admin-save"
+                    onClick={() => saveDelivery(index)}
+                    disabled={savingDeliveryId === zone._key}
+                  >
+                    {savingDeliveryId === zone._key ? 'Guardando…' : 'Guardar zona'}
+                  </button>
+                  <button type="button" className="admin-delete" onClick={() => removeDelivery(index)}>Eliminar</button>
+                </div>
+              </article>
+            ))}
           </div>
         </section>
 

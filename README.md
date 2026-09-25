@@ -134,6 +134,8 @@ alternativa de emergencia (ver "Editar sin el panel" más abajo).
   tocar Drive).
 - Activar/desactivar un producto sin borrarlo.
 - Agregar productos nuevos o eliminar los que ya no vende.
+- Crear, editar, ordenar, activar y eliminar zonas de delivery.
+- Definir por zona la tarifa, pedido mínimo, cobertura, tiempo estimado y si el precio se cotiza por WhatsApp.
 - Todo con botones de Guardar — sin fórmulas, sin código, sin Sheets.
 
 **Seguridad:** la clave del panel es una protección básica (evita que un visitante
@@ -147,3 +149,21 @@ editar celdas directamente también actualiza el sitio. Columnas: `ID` (no tocar
 `Categoría`, `Nombre`, `Descripción`, `Precio`, `Unidad`, `Foto (enlace de Drive)`,
 `Activo`. Para fotos: subir a Drive → Compartir → "Cualquier persona con el enlace" →
 pegar el enlace en la columna.
+
+### Configurar el delivery
+
+La sección **Zonas de delivery** de `/admin` permite que Cokoa gestione sus propias
+zonas sin modificar el sitio ni el Apps Script. La primera vez, el backend crea la
+pestaña `Delivery` con la configuración actual como punto de partida.
+
+Cada zona admite:
+- Nombre y descripción de sectores o cobertura.
+- Tarifa fija y pedido mínimo opcional.
+- Tiempo estimado.
+- Opción **Precio por cotizar** para coordinar el importe por WhatsApp.
+- Opción **Solicitar fecha** para entregas por agenda.
+- Orden y visibilidad en la tienda.
+
+El checkout usa solo las zonas activas. Antes de registrar el pedido, Apps Script vuelve
+a consultar la pestaña `Delivery`, aplica la tarifa vigente y valida el pedido mínimo;
+por tanto, el importe no depende únicamente de lo que envíe el navegador.

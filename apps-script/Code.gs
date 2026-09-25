@@ -67,6 +67,16 @@ const SETTINGS_SEED = [
   ['hero_zoom', 1],
 ];
 
+const DELIVERY_SHEET_NAME = 'Delivery';
+const DELIVERY_HEADERS = [
+  'ID', 'Nombre', 'Sectores / cobertura', 'Tarifa', 'Pedido mínimo',
+  'Tiempo estimado', 'Solicitar fecha', 'Por cotizar', 'Orden', 'Activo',
+];
+const DELIVERY_SEED = [
+  ['ciudad', 'Bávaro · Punta Cana', 'Delivery dentro de la ciudad.', 150, '', 'Mismo día', 'No', 'No', 1, 'Sí'],
+  ['fuera', 'Fuera de la ciudad', 'Coordinamos la entrega contigo por WhatsApp.', '', '', 'Por agenda', 'Sí', 'Sí', 2, 'Sí'],
+];
+
 function doPost(e) {
   try {
     const body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
@@ -76,6 +86,8 @@ function doPost(e) {
     if (body.action === 'subir_imagen') return handleSubirImagen_(body);
     if (body.action === 'guardar_categoria') return handleGuardarCategoria_(body);
     if (body.action === 'guardar_configuracion') return handleGuardarConfiguracion_(body);
+    if (body.action === 'guardar_delivery') return handleGuardarDelivery_(body);
+    if (body.action === 'eliminar_delivery') return handleEliminarDelivery_(body);
     return handlePedido_(body);
   } catch (err) {
     return jsonResponse_({ ok: false, error: String(err) });
@@ -90,6 +102,7 @@ function doGet(e) {
       items: readCatalog_(false),
       categories: readCategories_(false),
       settings: readSettings_(),
+      deliveryZones: readDeliveryZones_(false),
     });
   }
   if (p.action === 'catalogo_admin') {
@@ -99,6 +112,7 @@ function doGet(e) {
       items: readCatalog_(true),
       categories: readCategories_(true),
       settings: readSettings_(),
+      deliveryZones: readDeliveryZones_(true),
     });
   }
   return jsonResponse_({ ok: true, service: 'Cokoa Pedidos', status: 'activo' });
@@ -108,6 +122,9 @@ function handlePedido_(data) {
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
+    const delivery = applyDeliveryRules_(data);
+    if (!delivery.ok) return jsonResponse_({ ok: false, error: delivery.error });
+
     const reservation = prepareStockReservation_(data.items || []);
     if (!reservation.ok) return jsonResponse_({ ok: false, error: reservation.error });
 
@@ -140,7 +157,15 @@ function handlePedido_(data) {
     applyStockReservation_(reservation);
     sendBusinessAlert_(orderId, data, itemsText);
     if (data.email) sendCustomerConfirmation_(orderId, data);
-    return jsonResponse_({ ok: true, orderId: orderId });
+    return jsonResponse_({
+      ok: true,
+      orderId: orderId,
+      deliveryFee: data.deliveryFee,
+      deliveryFeeLabel: data.deliveryFeeLabel,
+      total: data.total,
+      methodLabel: data.methodLabel,
+      zone: data.zone,
+    });
   } catch (err) {
     return jsonResponse_({ ok: false, error: String(err) });
   } finally {
@@ -309,6 +334,88 @@ function handleGuardarConfiguracion_(body) {
   return jsonResponse_({ ok: true, settings: readSettings_() });
 }
 
+function handleGuardarDelivery_(body) {
+  if (!checkPin_(body)) return jsonResponse_({ ok: false, error: 'PIN incorrecto' });
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const zone = body.zone || {};
+    const name = String(zone.name || '').trim();
+    if (!name) return jsonResponse_({ ok: false, error: 'La zona necesita un nombre.' });
+
+    const sheet = getOrCreateDeliverySheet_();
+    const lastRow = sheet.getLastRow();
+    let id = String(zone.id || '').trim();
+    if (!id) id = uniqueDeliveryId_(sheet, slugify_(name));
+
+    let targetRow = -1;
+    if (lastRow >= 2) {
+      const ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+      for (let i = 0; i < ids.length; i++) {
+        if (String(ids[i][0]).trim() === id) { targetRow = i + 2; break; }
+      }
+    }
+
+    const quoteOnly = zone.quoteOnly === true;
+    const row = [
+      id,
+      name,
+      String(zone.coverage || '').trim(),
+      quoteOnly ? '' : Math.max(0, Number(zone.fee) || 0),
+      zone.minimum === '' || zone.minimum === null || typeof zone.minimum === 'undefined'
+        ? ''
+        : Math.max(0, Number(zone.minimum) || 0),
+      String(zone.eta || '').trim(),
+      zone.requestDate === true ? 'Sí' : 'No',
+      quoteOnly ? 'Sí' : 'No',
+      Math.max(1, Math.floor(Number(zone.order) || lastRow || 1)),
+      zone.active === false ? 'No' : 'Sí',
+    ];
+
+    if (targetRow > 0) sheet.getRange(targetRow, 1, 1, DELIVERY_HEADERS.length).setValues([row]);
+    else sheet.appendRow(row);
+    return jsonResponse_({ ok: true, zone: deliveryRowToObject_(row) });
+  } catch (err) {
+    return jsonResponse_({ ok: false, error: String(err) });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function handleEliminarDelivery_(body) {
+  if (!checkPin_(body)) return jsonResponse_({ ok: false, error: 'PIN incorrecto' });
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const sheet = getOrCreateDeliverySheet_();
+    const id = String(body.id || '').trim();
+    const lastRow = sheet.getLastRow();
+    if (lastRow >= 2) {
+      const ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+      for (let i = 0; i < ids.length; i++) {
+        if (String(ids[i][0]).trim() === id) { sheet.deleteRow(i + 2); break; }
+      }
+    }
+    return jsonResponse_({ ok: true });
+  } catch (err) {
+    return jsonResponse_({ ok: false, error: String(err) });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function uniqueDeliveryId_(sheet, base) {
+  const idBase = base || 'zona';
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return idBase;
+  const existing = sheet.getRange(2, 1, lastRow - 1, 1).getValues()
+    .map(function (row) { return String(row[0] || '').trim(); });
+  if (existing.indexOf(idBase) === -1) return idBase;
+  let suffix = 2;
+  while (existing.indexOf(idBase + '-' + suffix) !== -1) suffix++;
+  return idBase + '-' + suffix;
+}
+
 /** Recibe una foto en base64, la guarda en Drive y devuelve la URL pública. */
 function handleSubirImagen_(body) {
   if (!checkPin_(body)) return jsonResponse_({ ok: false, error: 'PIN incorrecto' });
@@ -366,6 +473,10 @@ function getOrCreateCategorySheet_() {
 
 function getOrCreateSettingsSheet_() {
   return prepareDataSheet_(SETTINGS_SHEET_NAME, SETTINGS_HEADERS, SETTINGS_SEED);
+}
+
+function getOrCreateDeliverySheet_() {
+  return prepareDataSheet_(DELIVERY_SHEET_NAME, DELIVERY_HEADERS, DELIVERY_SEED);
 }
 
 function driveLinkToImageUrl_(link) {
@@ -440,6 +551,72 @@ function readSettings_() {
     if (key === 'hero_zoom') settings.heroZoom = clampNumber_(row[1], 1, 1.8, 1);
   });
   return settings;
+}
+
+function deliveryRowToObject_(row) {
+  const minimum = row[4] === '' || row[4] === null ? 0 : Math.max(0, Number(row[4]) || 0);
+  return {
+    id: String(row[0] || '').trim(),
+    name: String(row[1] || '').trim(),
+    coverage: String(row[2] || '').trim(),
+    fee: Math.max(0, Number(row[3]) || 0),
+    minimum: minimum,
+    eta: String(row[5] || '').trim(),
+    requestDate: isYes_(row[6]),
+    quoteOnly: isYes_(row[7]),
+    order: Math.max(1, Math.floor(Number(row[8]) || 999)),
+    active: !isNo_(row[9]),
+  };
+}
+
+function readDeliveryZones_(includeInactive) {
+  const sheet = getOrCreateDeliverySheet_();
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  return sheet.getRange(2, 1, lastRow - 1, DELIVERY_HEADERS.length).getValues()
+    .map(deliveryRowToObject_)
+    .filter(function (zone) { return zone.id && zone.name && (includeInactive || zone.active); })
+    .sort(function (a, b) { return a.order - b.order; });
+}
+
+function applyDeliveryRules_(data) {
+  const subtotal = Math.max(0, Number(data.subtotal) || 0);
+  if (data.method === 'pickup') {
+    data.zone = '';
+    data.deliveryFee = 0;
+    data.deliveryFeeLabel = 'Gratis';
+    data.methodLabel = 'Pickup en tienda';
+    data.total = subtotal;
+    return { ok: true };
+  }
+
+  const requestedZone = String(data.zone || '').trim();
+  const zones = readDeliveryZones_(false);
+  const zone = zones.find(function (candidate) { return candidate.id === requestedZone; });
+  if (!zone) return { ok: false, error: 'Selecciona una zona de delivery disponible.' };
+  if (zone.minimum > 0 && subtotal < zone.minimum) {
+    return { ok: false, error: 'El pedido mínimo para ' + zone.name + ' es ' + fmtRD_(zone.minimum) + '.' };
+  }
+  if (zone.requestDate && !String(data.date || '').trim()) {
+    return { ok: false, error: 'Selecciona una fecha para la entrega en ' + zone.name + '.' };
+  }
+
+  data.zone = zone.name;
+  data.methodLabel = 'Delivery (' + zone.name + ')';
+  data.deliveryFee = zone.quoteOnly ? 0 : zone.fee;
+  data.deliveryFeeLabel = zone.quoteOnly ? 'Por cotizar' : fmtRD_(zone.fee);
+  data.total = subtotal + data.deliveryFee;
+  return { ok: true };
+}
+
+function isYes_(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return normalized === 'sí' || normalized === 'si' || normalized === 'true' || normalized === '1';
+}
+
+function isNo_(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return normalized === 'no' || normalized === 'false' || normalized === '0';
 }
 
 function clampNumber_(value, min, max, fallback) {

@@ -65,6 +65,14 @@ export async function saveSettings(pin, settings) {
   return post('guardar_configuracion', { pin, settings });
 }
 
+export async function saveDeliveryZone(pin, zone) {
+  return post('guardar_delivery', { pin, zone });
+}
+
+export async function deleteDeliveryZone(pin, id) {
+  return post('eliminar_delivery', { pin, id });
+}
+
 /** Convierte un archivo de imagen a base64 y lo sube; devuelve la URL pública en Drive. */
 export async function uploadImage(pin, file) {
   const base64 = await new Promise((resolve, reject) => {

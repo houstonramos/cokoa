@@ -1,53 +1,67 @@
-import { useState } from 'react';
-import { fmt, methodLabel, submitOrder, buildWhatsAppLink } from '../lib/order';
-import { DELIVERY_FEE_CIUDAD } from '../data/catalog';
+import { useEffect, useState } from 'react';
+import { fmt, submitOrder, buildWhatsAppLink } from '../lib/order';
 
-export default function CartDrawer({ open, onClose, cart, changeQty, resetCart }) {
+export default function CartDrawer({ open, onClose, cart, changeQty, resetCart, deliveryZones = [] }) {
   const [step, setStep] = useState('cart'); // cart | checkout | done
   const [method, setMethod] = useState('delivery'); // delivery | pickup
-  const [zone, setZone] = useState('ciudad'); // ciudad | fuera
+  const [zone, setZone] = useState('');
   const [payment, setPayment] = useState('transferencia');
   const [form, setForm] = useState({ name: '', phone: '', email: '', address: '', date: '', notes: '' });
   const [orderId, setOrderId] = useState(null);
   const [waLink, setWaLink] = useState(null);
   const [sending, setSending] = useState(false);
+  const [confirmedOrder, setConfirmedOrder] = useState(null);
+
+  const activeZones = deliveryZones.filter((candidate) => candidate.active !== false);
+  const selectedZone = activeZones.find((candidate) => candidate.id === zone) || activeZones[0] || null;
+
+  useEffect(() => {
+    if (selectedZone && zone !== selectedZone.id) setZone(selectedZone.id);
+    if (!selectedZone && method === 'delivery') setMethod('pickup');
+  }, [selectedZone, zone, method]);
 
   const setField = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
   const subtotal = cart.reduce((t, c) => t + c.price * c.qty, 0);
-  const deliveryFee = method === 'delivery' && zone === 'ciudad' ? DELIVERY_FEE_CIUDAD : 0;
+  const deliveryFee = method === 'delivery' && selectedZone && !selectedZone.quoteOnly ? selectedZone.fee : 0;
   const total = subtotal + deliveryFee;
+  const minimumMissing = method === 'delivery'
+    && selectedZone
+    && selectedZone.minimum > 0
+    && subtotal < selectedZone.minimum;
 
   let deliveryRowLabel = 'Retiro en tienda';
   let deliveryFeeLabel = 'Gratis';
   let doneNote = 'Te contactaremos por WhatsApp para coordinar el retiro en tienda.';
-  if (method === 'delivery') {
-    if (zone === 'ciudad') {
-      deliveryRowLabel = 'Delivery (Bávaro · Punta Cana)';
-      deliveryFeeLabel = fmt(DELIVERY_FEE_CIUDAD);
-      doneNote = 'Entrega el mismo día en Bávaro · Punta Cana. Te escribimos por WhatsApp para confirmar.';
-    } else {
-      deliveryRowLabel = 'Delivery (fuera de la ciudad)';
-      deliveryFeeLabel = 'Por agenda';
-      doneNote = 'Entrega por agenda: coordinaremos la fecha y el costo de envío contigo por WhatsApp.';
-    }
+  if (method === 'delivery' && selectedZone) {
+    deliveryRowLabel = `Delivery (${selectedZone.name})`;
+    deliveryFeeLabel = selectedZone.quoteOnly ? 'Por cotizar' : fmt(selectedZone.fee);
+    doneNote = selectedZone.quoteOnly
+      ? `Coordinaremos el costo y la entrega en ${selectedZone.name} contigo por WhatsApp.`
+      : `${selectedZone.eta || 'Coordinaremos la entrega'} en ${selectedZone.name}. Te escribimos por WhatsApp para confirmar.`;
   }
 
-  const dateLabel = method === 'delivery' && zone === 'fuera' ? 'Fecha de entrega (por agenda) *' : 'Fecha deseada';
+  const dateRequired = method === 'delivery' && selectedZone && selectedZone.requestDate;
+  const dateLabel = dateRequired ? 'Fecha de entrega *' : 'Fecha deseada';
 
   const canPlace = () => {
     if (!form.name.trim() || !form.phone.trim()) return false;
+    if (method === 'delivery' && !selectedZone) return false;
     if (method === 'delivery' && !form.address.trim()) return false;
-    if (method === 'delivery' && zone === 'fuera' && !form.date) return false;
+    if (dateRequired && !form.date) return false;
     return true;
   };
 
   const place = async () => {
+    if (minimumMissing) {
+      alert(`El pedido mínimo para ${selectedZone.name} es ${fmt(selectedZone.minimum)}.`);
+      return;
+    }
     if (!canPlace()) {
       alert(
         'Completa nombre, teléfono' +
           (method === 'delivery' ? ', dirección' : '') +
-          (method === 'delivery' && zone === 'fuera' ? ' y fecha (entrega por agenda)' : '') +
+          (dateRequired ? ' y fecha de entrega' : '') +
           '.'
       );
       return;
@@ -62,12 +76,12 @@ export default function CartDrawer({ open, onClose, cart, changeQty, resetCart }
       deliveryFee,
       total,
       method,
-      zone: method === 'delivery' ? zone : '',
+      zone: method === 'delivery' && selectedZone ? selectedZone.id : '',
       address: method === 'delivery' ? form.address.trim() : '',
       date: form.date,
       notes: form.notes.trim(),
       payment,
-      methodLabel: methodLabel(method, zone),
+      methodLabel: method === 'pickup' ? 'Pickup en tienda' : `Delivery (${selectedZone.name})`,
       deliveryFeeLabel,
     };
     const res = await submitOrder(payload);
@@ -77,12 +91,18 @@ export default function CartDrawer({ open, onClose, cart, changeQty, resetCart }
       return;
     }
     setOrderId(res.orderId);
-    const link = buildWhatsAppLink({
+    const finalOrder = {
       ...payload,
       orderId: res.orderId,
-      deliveryRowLabel,
-      deliveryFeeLabel,
-    });
+      deliveryFee: typeof res.deliveryFee === 'number' ? res.deliveryFee : payload.deliveryFee,
+      deliveryFeeLabel: res.deliveryFeeLabel || payload.deliveryFeeLabel,
+      deliveryRowLabel: res.methodLabel || deliveryRowLabel,
+      methodLabel: res.methodLabel || payload.methodLabel,
+      zone: res.zone || payload.zone,
+      total: typeof res.total === 'number' ? res.total : payload.total,
+    };
+    setConfirmedOrder(finalOrder);
+    const link = buildWhatsAppLink(finalOrder);
     setWaLink(link);
     setStep('done');
     if (link) window.open(link, '_blank', 'noopener');
@@ -93,6 +113,7 @@ export default function CartDrawer({ open, onClose, cart, changeQty, resetCart }
     setStep('cart');
     setOrderId(null);
     setWaLink(null);
+    setConfirmedOrder(null);
     setForm({ name: '', phone: '', email: '', address: '', date: '', notes: '' });
     onClose();
   };
@@ -176,23 +197,39 @@ export default function CartDrawer({ open, onClose, cart, changeQty, resetCart }
 
             <div className="field-group-label">Método</div>
             <div className="choice-grid-2">
-              <button className={choice(method === 'delivery')} onClick={() => setMethod('delivery')}>Delivery</button>
+              <button
+                className={choice(method === 'delivery')}
+                onClick={() => setMethod('delivery')}
+                disabled={!activeZones.length}
+              >
+                Delivery
+              </button>
               <button className={choice(method === 'pickup')} onClick={() => setMethod('pickup')}>Pickup en tienda</button>
             </div>
 
-            {method === 'delivery' && (
+            {method === 'delivery' && selectedZone && (
               <div>
                 <div className="field-group-label">Zona</div>
-                <div className="choice-grid-2">
-                  <button className={choice(zone === 'ciudad') + ' zone'} onClick={() => setZone('ciudad')}>
-                    Bávaro · Punta Cana<br />
-                    <span className="choice-sub">Mismo día · RD$150</span>
-                  </button>
-                  <button className={choice(zone === 'fuera') + ' zone'} onClick={() => setZone('fuera')}>
-                    Fuera de la ciudad<br />
-                    <span className="choice-sub">Por agenda</span>
-                  </button>
+                <div className="choice-grid-delivery">
+                  {activeZones.map((candidate) => (
+                    <button
+                      key={candidate.id}
+                      className={choice(selectedZone.id === candidate.id) + ' zone'}
+                      onClick={() => setZone(candidate.id)}
+                    >
+                      <strong>{candidate.name}</strong>
+                      <span className="choice-sub">
+                        {[candidate.eta, candidate.quoteOnly ? 'Por cotizar' : fmt(candidate.fee)].filter(Boolean).join(' · ')}
+                      </span>
+                    </button>
+                  ))}
                 </div>
+                {selectedZone.coverage && <p className="delivery-zone-coverage">{selectedZone.coverage}</p>}
+                {selectedZone.minimum > 0 && (
+                  <p className={`delivery-zone-minimum${minimumMissing ? ' is-missing' : ''}`}>
+                    Pedido mínimo: {fmt(selectedZone.minimum)}
+                  </p>
+                )}
                 <label className="field-label" htmlFor="cw-address">Dirección</label>
                 <input id="cw-address" className="field-input" value={form.address} onChange={setField('address')} placeholder="Calle, número, sector, referencia" />
               </div>
@@ -215,9 +252,12 @@ export default function CartDrawer({ open, onClose, cart, changeQty, resetCart }
               <div className="summary-row"><span>Subtotal</span><span>{fmt(subtotal)}</span></div>
               <div className="summary-row"><span>{deliveryRowLabel}</span><span>{deliveryFeeLabel}</span></div>
               <div className="summary-total">
-                <span className="label">Total</span>
+                <span className="label">{selectedZone?.quoteOnly && method === 'delivery' ? 'Total de productos' : 'Total'}</span>
                 <span className="value">{fmt(total)}</span>
               </div>
+              {selectedZone?.quoteOnly && method === 'delivery' && (
+                <p className="summary-pending">El costo del delivery se confirma por WhatsApp.</p>
+              )}
             </div>
 
             <button className="btn-confirm" onClick={place} disabled={sending}>
@@ -233,7 +273,7 @@ export default function CartDrawer({ open, onClose, cart, changeQty, resetCart }
             <h3 className="done-title">¡Pedido recibido!</h3>
             <p className="done-text">
               Gracias, <strong>{form.name}</strong>. Tu pedido <strong>{orderId}</strong> por{' '}
-              <strong>{fmt(total)}</strong> fue registrado.
+              <strong>{fmt(confirmedOrder?.total ?? total)}</strong> fue registrado.
             </p>
             <p className="done-note">{doneNote}</p>
             {waLink && (

@@ -34,8 +34,6 @@ export const EXPERIENCES = [
   },
 ].map((e) => ({ ...e, unit: 'por persona' }));
 
-export const DELIVERY_FEE_CIUDAD = 150;
-
 export const CONTACT = {
   instagram: 'cokoabychefmanurossi',
   location: 'Bávaro, Punta Cana 🇩🇴',

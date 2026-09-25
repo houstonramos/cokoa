@@ -86,6 +86,12 @@ export default function App() {
     .filter((group) => group.items.length > 0);
 
   const firstSection = groups[0] ? `#${slugifyCategory(groups[0].name)}` : '#catalogo';
+  const deliveryZones = (catalog.deliveryZones || []).filter((zone) => zone.active !== false);
+  const deliverySummary = deliveryZones.length === 0
+    ? 'Pickup disponible en tienda'
+    : deliveryZones.length === 1
+      ? `Delivery en ${deliveryZones[0].name}`
+      : `Delivery disponible en ${deliveryZones.length} zonas`;
 
   const addToCart = (item) => {
     if (isSoldOut(item)) return;
@@ -131,9 +137,9 @@ export default function App() {
     <div className="page">
       <div className="announcement">
         <span className="announcement-desktop">
-          Delivery en Bávaro · Punta Cana &nbsp;—&nbsp; fuera de la ciudad, entregas por agenda
+          {deliverySummary} &nbsp;—&nbsp; consulta la tarifa de tu zona al ordenar
         </span>
-        <span className="announcement-mobile">Delivery Bávaro · Punta Cana · Otras zonas por agenda</span>
+        <span className="announcement-mobile">{deliverySummary} · Consulta tu tarifa</span>
       </div>
 
       <nav className="nav">
@@ -204,14 +210,17 @@ export default function App() {
 
       <section className="delivery-band">
         <div className="delivery-grid">
-          <div>
-            <div className="delivery-title">Bávaro · Punta Cana</div>
-            <p className="delivery-desc">Delivery dentro de la ciudad, entrega el mismo día.</p>
-          </div>
-          <div className="delivery-mid">
-            <div className="delivery-title">Fuera de la ciudad</div>
-            <p className="delivery-desc">Entregas <strong>por agenda</strong> — coordinamos fecha contigo.</p>
-          </div>
+          {deliveryZones.map((zone) => (
+            <div className="delivery-option" key={zone.id}>
+              <div className="delivery-title">{zone.name}</div>
+              <p className="delivery-price">{zone.quoteOnly ? 'Tarifa por cotizar' : fmt(zone.fee)}</p>
+              <p className="delivery-desc">
+                {zone.coverage || 'Delivery disponible.'}
+                {zone.eta && <><br /><strong>{zone.eta}</strong></>}
+                {zone.minimum > 0 && <><br />Pedido mínimo: {fmt(zone.minimum)}</>}
+              </p>
+            </div>
+          ))}
           <div>
             <div className="delivery-title">Pickup en tienda</div>
             <p className="delivery-desc">Retira tu pedido sin costo en nuestra tienda.</p>
@@ -239,6 +248,7 @@ export default function App() {
         cart={cart}
         changeQty={changeQty}
         resetCart={() => setCart([])}
+        deliveryZones={deliveryZones}
       />
 
       {cartNotice && (

@@ -53,12 +53,14 @@ Borra la fila de prueba cuando quieras.
 1. En Apps Script: **Implementar → Nueva implementación**.
 2. Tipo: **Aplicación web**.
 3. Configuración:
-   - **Ejecutar como:** *Yo* (tu cuenta).
+   - **Ejecutar como:** *Yo* (la cuenta empresarial de Cokoa).
    - **Quién tiene acceso:** *Cualquier persona*. ← imprescindible, si no el sitio no podrá enviar pedidos.
 4. **Implementar** y copia la **URL de la aplicación web** (termina en `/exec`).
 5. Verifica: abre esa URL en el navegador — debe responder `{"ok":true,"service":"Cokoa Pedidos","status":"activo"}`.
 
 > ⚠️ Si después modificas el código del script, debes ir a **Implementar → Administrar implementaciones → ✏️ → Versión: Nueva** para que los cambios se publiquen. Editar y guardar no basta.
+
+> La cuenta que crea la implementación es el remitente real de los correos. Compartir o transferir el proyecto no migra una implementación existente: crea una nueva desde la cuenta empresarial y actualiza `VITE_COKOA_ORDERS_ENDPOINT`.
 
 ## Paso 3 — Configurar el frontend
 
@@ -68,7 +70,7 @@ Borra la fila de prueba cuando quieras.
    ```
 2. Edita `.env`:
    ```
-   VITE_ORDERS_ENDPOINT=https://script.google.com/macros/s/TU_ID/exec
+   VITE_COKOA_ORDERS_ENDPOINT=https://script.google.com/macros/s/TU_ID/exec
    VITE_WHATSAPP_NUMBER=18091234567
    ```
    - `VITE_WHATSAPP_NUMBER`: formato internacional **sin** `+`, espacios ni guiones.
@@ -86,14 +88,14 @@ Abre http://localhost:5173, agrega productos, completa el checkout y confirma. V
 - Correo de alerta interna (+ correo al cliente si puso email).
 - Se abre WhatsApp con el resumen del pedido pre-armado.
 
-## Paso 5 — Desplegar en Vercel
+## Paso 5 — Desplegar en Netlify
 
 1. Sube el proyecto a un repositorio de GitHub.
-2. En [vercel.com](https://vercel.com): **Add New → Project → importa el repo**. Vercel detecta Vite automáticamente.
+2. En Netlify: **Add new project → Import an existing project**. Netlify detecta Vite automáticamente.
 3. En **Settings → Environment Variables**, agrega:
-   - `VITE_ORDERS_ENDPOINT`
+   - `VITE_COKOA_ORDERS_ENDPOINT`
    - `VITE_WHATSAPP_NUMBER`
-4. **Deploy**. Listo: tu sitio queda en `tu-proyecto.vercel.app` (puedes conectar dominio propio en Settings → Domains).
+4. **Deploy**. Listo: tu sitio queda en `tu-proyecto.netlify.app` (puedes conectar dominio propio en Domain management).
 
 > Si cambias una variable de entorno en Vercel, haz **Redeploy** para que tome efecto (las variables `VITE_*` se inyectan en build, no en runtime).
 

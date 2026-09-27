@@ -1,4 +1,6 @@
-const ENDPOINT = import.meta.env.VITE_ORDERS_ENDPOINT || '';
+import { ORDERS_ENDPOINT } from './backend';
+
+const ENDPOINT = ORDERS_ENDPOINT;
 const PIN_KEY = 'cokoa_admin_pin';
 
 export function getSavedPin() {
@@ -30,12 +32,12 @@ async function post(action, payload) {
 }
 
 export async function login(pin) {
-  if (!ENDPOINT) return { ok: false, error: 'El sitio no tiene configurado VITE_ORDERS_ENDPOINT.' };
+  if (!ENDPOINT) return { ok: false, error: 'El sitio no tiene configurado VITE_COKOA_ORDERS_ENDPOINT.' };
   return post('login', { pin });
 }
 
 export async function fetchAdminCatalog(pin) {
-  if (!ENDPOINT) return { ok: false, error: 'El sitio no tiene configurado VITE_ORDERS_ENDPOINT.' };
+  if (!ENDPOINT) return { ok: false, error: 'El sitio no tiene configurado VITE_COKOA_ORDERS_ENDPOINT.' };
   try {
     const res = await fetch(`${ENDPOINT}?action=catalogo_admin&pin=${encodeURIComponent(pin)}`);
     const text = await res.text();

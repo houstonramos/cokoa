@@ -1,3 +1,5 @@
+import { ORDERS_ENDPOINT } from './backend';
+
 // Formato de moneda dominicana
 export const fmt = (n) => 'RD$' + Number(n).toLocaleString('es-DO');
 
@@ -7,7 +9,7 @@ export const methodLabel = (method, zone) => {
   return zone ? `Delivery (${zone})` : 'Delivery';
 };
 
-const ENDPOINT = import.meta.env.VITE_ORDERS_ENDPOINT || '';
+const ENDPOINT = ORDERS_ENDPOINT;
 const WA_NUMBER = import.meta.env.VITE_WHATSAPP_NUMBER || '';
 
 /**

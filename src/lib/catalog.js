@@ -1,6 +1,7 @@
 import { PRODUCTS as STATIC_PRODUCTS, BOXES as STATIC_BOXES, EXPERIENCES as STATIC_EXPERIENCES } from '../data/catalog';
+import { ORDERS_ENDPOINT } from './backend';
 
-const ENDPOINT = import.meta.env.VITE_ORDERS_ENDPOINT || '';
+const ENDPOINT = ORDERS_ENDPOINT;
 const CATALOG_CACHE_KEY = 'cokoa_live_catalog_v3';
 const DRIVE_IMAGE_WIDTHS = [480, 720, 960, 1280];
 

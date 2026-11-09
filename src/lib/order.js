@@ -1,7 +1,7 @@
 import { ORDERS_ENDPOINT } from './backend';
 
-// Formato de moneda dominicana
-export const fmt = (n) => 'RD$' + Number(n).toLocaleString('es-DO');
+// Formato de moneda dominicana con separadores apropiados para cada idioma.
+export const fmt = (n, locale = 'es') => 'RD$' + Number(n).toLocaleString(locale === 'en' ? 'en-US' : 'es-DO');
 
 // Etiquetas legibles para el pedido
 export const methodLabel = (method, zone) => {
@@ -42,25 +42,32 @@ export async function submitOrder(payload) {
 /** Construye el enlace wa.me con el resumen del pedido pre-armado. */
 export function buildWhatsAppLink(order) {
   if (!WA_NUMBER) return null;
+  const isEnglish = order.locale === 'en';
+  const itemLabel = isEnglish ? 'Order' : 'Pedido';
   const lines = [
-    `🍮 *Nuevo pedido ${order.orderId}* — Cokoa`,
+    `🍮 *${isEnglish ? 'New order' : 'Nuevo pedido'} ${order.orderId}* — Cokoa`,
     '',
-    `*Cliente:* ${order.name}`,
-    `*Teléfono:* ${order.phone}`,
+    `*${isEnglish ? 'Customer' : 'Cliente'}:* ${order.name}`,
+    `*${isEnglish ? 'Phone' : 'Teléfono'}:* ${order.phone}`,
     '',
-    '*Pedido:*',
-    ...order.items.map((i) => `• ${i.qty}× ${i.name} — ${fmt(i.price * i.qty)}`),
+    `*${itemLabel}:*`,
+    ...order.items.map((i) => `• ${i.qty}× ${i.name} — ${fmt(i.price * i.qty, order.locale)}`),
     '',
-    `Subtotal: ${fmt(order.subtotal)}`,
+    `Subtotal: ${fmt(order.subtotal, order.locale)}`,
     `${order.deliveryRowLabel}: ${order.deliveryFeeLabel}`,
-    `*Total: ${fmt(order.total)}*`,
+    `*Total: ${fmt(order.total, order.locale)}*`,
     '',
-    `*Entrega:* ${order.methodLabel || methodLabel(order.method, order.zone)}`,
+    `*${isEnglish ? 'Delivery' : 'Entrega'}:* ${order.methodLabel || methodLabel(order.method, order.zone)}`,
   ];
-  if (order.method === 'delivery' && order.address) lines.push(`*Dirección:* ${order.address}`);
-  if (order.date) lines.push(`*Fecha:* ${order.date}`);
-  lines.push(`*Pago:* ${order.payment}`);
-  if (order.notes) lines.push(`*Notas:* ${order.notes}`);
+  if (order.method === 'delivery' && order.address) lines.push(`*${isEnglish ? 'Address' : 'Dirección'}:* ${order.address}`);
+  if (order.date) lines.push(`*${isEnglish ? 'Date' : 'Fecha'}:* ${order.date}`);
+  lines.push(`*${isEnglish ? 'Payment' : 'Pago'}:* ${paymentLabel(order.payment, order.locale)}`);
+  if (order.notes) lines.push(`*${isEnglish ? 'Notes' : 'Notas'}:* ${order.notes}`);
 
   return `https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(lines.join('\n'))}`;
+}
+
+function paymentLabel(payment, locale) {
+  if (locale !== 'en') return payment;
+  return { transferencia: 'bank transfer', efectivo: 'cash', tarjeta: 'card' }[payment] || payment;
 }

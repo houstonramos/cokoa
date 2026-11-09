@@ -2,6 +2,9 @@
 
 Sitio web de pedidos: landing + catálogo + carrito + checkout, con backend de pedidos en Google Sheets, correos automáticos y continuación por WhatsApp.
 
+La tienda pública es bilingüe: español en `/` e inglés en `/en`. El selector `ES | EN`
+mantiene separados los enlaces de cada idioma sin añadir una librería de routing.
+
 **Stack:** Vite + React (frontend) · Google Apps Script + Google Sheets (backend) · WhatsApp (wa.me) para seguimiento.
 
 ---
@@ -97,7 +100,7 @@ Abre http://localhost:5173, agrega productos, completa el checkout y confirma. V
    - `VITE_WHATSAPP_NUMBER`
 4. **Deploy**. Listo: tu sitio queda en `tu-proyecto.netlify.app` (puedes conectar dominio propio en Domain management).
 
-> Si cambias una variable de entorno en Vercel, haz **Redeploy** para que tome efecto (las variables `VITE_*` se inyectan en build, no en runtime).
+> Si cambias una variable de entorno en Netlify, haz **Retry deploy** para que tome efecto (las variables `VITE_*` se inyectan en build, no en runtime).
 
 ---
 
@@ -131,12 +134,14 @@ alternativa de emergencia (ver "Editar sin el panel" más abajo).
 
 **Qué puede hacer Manu desde el panel:**
 - Editar nombre, descripción, precio y unidad de cada producto.
+- Editar el nombre, la descripción y la unidad que verá el cliente en inglés.
 - Subir una foto directamente desde su computadora o celular (se guarda sola en una
   carpeta de Google Drive llamada "Cokoa - Fotos de productos", sin que ella tenga que
   tocar Drive).
 - Activar/desactivar un producto sin borrarlo.
 - Agregar productos nuevos o eliminar los que ya no vende.
 - Crear, editar, ordenar, activar y eliminar zonas de delivery.
+- Editar en inglés las categorías y los textos visibles de cada zona de delivery.
 - Definir por zona la tarifa, pedido mínimo, cobertura, tiempo estimado y si el precio se cotiza por WhatsApp.
 - Todo con botones de Guardar — sin fórmulas, sin código, sin Sheets.
 
@@ -149,8 +154,19 @@ real de un catálogo de postres. No la compartas fuera del equipo del negocio.
 La pestaña "Catálogo" de la Google Sheet sigue funcionando exactamente igual que antes:
 editar celdas directamente también actualiza el sitio. Columnas: `ID` (no tocar),
 `Categoría`, `Nombre`, `Descripción`, `Precio`, `Unidad`, `Foto (enlace de Drive)`,
-`Activo`. Para fotos: subir a Drive → Compartir → "Cualquier persona con el enlace" →
+`Activo`, `Nombre (EN)`, `Descripción (EN)` y `Unidad (EN)`. Para fotos: subir a Drive → Compartir → "Cualquier persona con el enlace" →
 pegar el enlace en la columna.
+
+### Idioma inglés
+
+- `/` permanece como la versión oficial en español.
+- `/en` muestra navegación, catálogo, carrito, checkout, delivery y confirmación en inglés.
+- Los productos publicados al crear esta función tienen una traducción inglesa inicial.
+- Para productos futuros, el panel ofrece campos ingleses. Si se dejan vacíos, el sitio
+  usa el texto español como respaldo para que el producto nunca desaparezca.
+- El correo de confirmación al comprador se envía en el idioma con el que realizó el pedido.
+- La alerta interna que recibe Cokoa permanece en español.
+- Después de cambiar `apps-script/Code.gs`, se debe publicar una nueva versión del Web App.
 
 ### Configurar el delivery
 

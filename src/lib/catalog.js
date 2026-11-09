@@ -2,7 +2,7 @@ import { PRODUCTS as STATIC_PRODUCTS, BOXES as STATIC_BOXES, EXPERIENCES as STAT
 import { ORDERS_ENDPOINT } from './backend';
 
 const ENDPOINT = ORDERS_ENDPOINT;
-const CATALOG_CACHE_KEY = 'cokoa_live_catalog_v3';
+const CATALOG_CACHE_KEY = 'cokoa_live_catalog_v4';
 const DRIVE_IMAGE_WIDTHS = [480, 720, 960, 1280];
 
 export const DEFAULT_HERO_SETTINGS = {
@@ -13,23 +13,26 @@ export const DEFAULT_HERO_SETTINGS = {
 };
 
 export const DEFAULT_CATEGORIES = [
-  { id: 'latas', name: 'Latas', order: 1, active: true },
-  { id: 'postres', name: 'Postres', order: 2, active: true },
-  { id: 'bebidas', name: 'Bebidas', order: 3, active: true },
-  { id: 'chocolates', name: 'Chocolates', order: 4, active: true },
-  { id: 'cosmeticos', name: 'Cosméticos', order: 5, active: true },
-  { id: 'cajas', name: 'Cajas', order: 6, active: true },
-  { id: 'experiencias', name: 'Experiencias', order: 7, active: true },
+  { id: 'latas', name: 'Latas', nameEn: 'Desserts in Cans', order: 1, active: true },
+  { id: 'postres', name: 'Postres', nameEn: 'Desserts', order: 2, active: true },
+  { id: 'bebidas', name: 'Bebidas', nameEn: 'Drinks', order: 3, active: true },
+  { id: 'chocolates', name: 'Chocolates', nameEn: 'Chocolates', order: 4, active: true },
+  { id: 'cosmeticos', name: 'Cosméticos', nameEn: 'Cacao Cosmetics', order: 5, active: true },
+  { id: 'cajas', name: 'Cajas', nameEn: 'Gift Boxes', order: 6, active: true },
+  { id: 'experiencias', name: 'Experiencias', nameEn: 'Experiences', order: 7, active: true },
 ];
 
 export const DEFAULT_DELIVERY_ZONES = [
   {
     id: 'ciudad',
     name: 'Bávaro · Punta Cana',
+    nameEn: 'Bavaro · Punta Cana',
     coverage: 'Delivery dentro de la ciudad.',
+    coverageEn: 'Delivery within the city.',
     fee: 150,
     minimum: 0,
     eta: 'Mismo día',
+    etaEn: 'Same day',
     requestDate: false,
     quoteOnly: false,
     order: 1,
@@ -38,10 +41,13 @@ export const DEFAULT_DELIVERY_ZONES = [
   {
     id: 'fuera',
     name: 'Fuera de la ciudad',
+    nameEn: 'Outside the city',
     coverage: 'Coordinamos la entrega contigo por WhatsApp.',
+    coverageEn: 'We coordinate delivery with you via WhatsApp.',
     fee: 0,
     minimum: 0,
     eta: 'Por agenda',
+    etaEn: 'By appointment',
     requestDate: true,
     quoteOnly: true,
     order: 2,
@@ -156,8 +162,11 @@ function mapItem(item) {
     category: normalizeCategoryName(item.category),
     name: String(item.name || '').trim(),
     desc: String(item.desc || '').trim(),
+    nameEn: String(item.nameEn || item.name_en || '').trim(),
+    descEn: String(item.descEn || item.desc_en || '').trim(),
     price: Number(item.price) || 0,
     unit: String(item.unit || '').trim(),
+    unitEn: String(item.unitEn || item.unit_en || '').trim(),
     image: normalizeDriveImageUrl(item.image || item.rawImage || ''),
     rawImage: String(item.rawImage || item.image || '').trim(),
     active: item.active !== false,
@@ -177,6 +186,7 @@ function mapCategories(values, items) {
     return {
       id,
       name,
+      nameEn: String(category.nameEn || category.name_en || '').trim(),
       order: Number(category.order) || index + 1,
       active: category.active !== false,
     };
@@ -185,7 +195,7 @@ function mapCategories(values, items) {
   items.forEach((item) => {
     const id = slugifyCategory(item.category);
     if (!seen.has(id)) {
-      categories.push({ id, name: item.category, order: categories.length + 1, active: true });
+      categories.push({ id, name: item.category, nameEn: '', order: categories.length + 1, active: true });
       seen.add(id);
     }
   });
@@ -213,10 +223,13 @@ export function normalizeDeliveryZones(values, includeInactive = false) {
     .map((zone, index) => ({
       id: String(zone.id || '').trim(),
       name: String(zone.name || '').trim(),
+      nameEn: String(zone.nameEn || zone.name_en || '').trim(),
       coverage: String(zone.coverage || '').trim(),
+      coverageEn: String(zone.coverageEn || zone.coverage_en || '').trim(),
       fee: Math.max(0, Number(zone.fee) || 0),
       minimum: Math.max(0, Number(zone.minimum) || 0),
       eta: String(zone.eta || '').trim(),
+      etaEn: String(zone.etaEn || zone.eta_en || '').trim(),
       requestDate: asBoolean(zone.requestDate, false),
       quoteOnly: asBoolean(zone.quoteOnly, false),
       order: Math.max(1, Math.floor(Number(zone.order) || index + 1)),

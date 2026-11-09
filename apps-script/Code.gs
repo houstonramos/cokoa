@@ -26,6 +26,7 @@ const CATALOG_SHEET_NAME = 'Catálogo';
 const CATALOG_HEADERS = [
   'ID', 'Categoría', 'Nombre', 'Descripción', 'Precio', 'Unidad',
   'Foto (enlace de Drive)', 'Activo', 'Inventario', 'En oferta', 'Precio oferta',
+  'Nombre (EN)', 'Descripción (EN)', 'Unidad (EN)',
 ];
 
 const CATALOG_SEED = [
@@ -47,7 +48,7 @@ const CATALOG_SEED = [
 ];
 
 const CATEGORY_SHEET_NAME = 'Categorías';
-const CATEGORY_HEADERS = ['ID', 'Nombre', 'Orden', 'Activo'];
+const CATEGORY_HEADERS = ['ID', 'Nombre', 'Orden', 'Activo', 'Nombre (EN)'];
 const CATEGORY_SEED = [
   ['latas', 'Latas', 1, 'Sí'],
   ['postres', 'Postres', 2, 'Sí'],
@@ -71,6 +72,7 @@ const DELIVERY_SHEET_NAME = 'Delivery';
 const DELIVERY_HEADERS = [
   'ID', 'Nombre', 'Sectores / cobertura', 'Tarifa', 'Pedido mínimo',
   'Tiempo estimado', 'Solicitar fecha', 'Por cotizar', 'Orden', 'Activo',
+  'Nombre (EN)', 'Cobertura (EN)', 'Tiempo estimado (EN)',
 ];
 const DELIVERY_SEED = [
   ['ciudad', 'Bávaro · Punta Cana', 'Delivery dentro de la ciudad.', 150, '', 'Mismo día', 'No', 'No', 1, 'Sí'],
@@ -125,14 +127,14 @@ function handlePedido_(data) {
     const delivery = applyDeliveryRules_(data);
     if (!delivery.ok) return jsonResponse_({ ok: false, error: delivery.error });
 
-    const reservation = prepareStockReservation_(data.items || []);
+    const reservation = prepareStockReservation_(data.items || [], data.locale);
     if (!reservation.ok) return jsonResponse_({ ok: false, error: reservation.error });
 
     const sheet = getOrCreateSheet_();
     const orderId = nextOrderId_(sheet);
     const now = new Date();
     const itemsText = (data.items || [])
-      .map(function (item) { return item.qty + 'x ' + item.name + ' (RD$' + item.price + ')'; })
+      .map(function (item) { return item.qty + 'x ' + (item.nameEs || item.name) + ' (RD$' + item.price + ')'; })
       .join(' | ');
 
     sheet.appendRow([
@@ -174,7 +176,8 @@ function handlePedido_(data) {
 }
 
 /** Blank inventory is unlimited; a numeric value is controlled stock. */
-function prepareStockReservation_(items) {
+function prepareStockReservation_(items, locale) {
+  const english = locale === 'en';
   const requested = {};
   (items || []).forEach(function (item) {
     const id = String(item.id || '').trim();
@@ -183,7 +186,7 @@ function prepareStockReservation_(items) {
   });
 
   const ids = Object.keys(requested);
-  if (!ids.length) return { ok: false, error: 'El carrito está vacío.' };
+  if (!ids.length) return { ok: false, error: english ? 'Your cart is empty.' : 'El carrito está vacío.' };
 
   const sheet = getOrCreateCatalogSheet_();
   const lastRow = sheet.getLastRow();
@@ -198,10 +201,11 @@ function prepareStockReservation_(items) {
     if (rawStock === '' || rawStock === null) return;
     const stock = Math.max(0, Math.floor(Number(rawStock) || 0));
     if (requested[id] > stock) {
+      const productName = String((english ? row[11] : row[2]) || row[2] || (english ? 'A product' : 'Un producto'));
       updates.push({
         error: stock === 0
-          ? String(row[2] || 'Un producto') + ' está agotado. Retíralo del carrito para continuar.'
-          : 'Solo quedan ' + stock + ' unidades de ' + String(row[2] || 'este producto') + '.',
+          ? productName + (english ? ' is sold out. Remove it from your cart to continue.' : ' está agotado. Retíralo del carrito para continuar.')
+          : (english ? 'Only ' + stock + ' units of ' + productName + ' remain.' : 'Solo quedan ' + stock + ' unidades de ' + productName + '.'),
       });
       return;
     }
@@ -255,6 +259,9 @@ function handleGuardarItem_(body) {
       stock,
       offerActive ? 'Sí' : 'No',
       offerPrice,
+      item.nameEn || '',
+      item.descEn || '',
+      item.unitEn || '',
     ];
 
     const lastRow = sheet.getLastRow();
@@ -312,7 +319,7 @@ function handleGuardarCategoria_(body) {
       if (String(ids[i][0]).trim() === id) { targetRow = i + 2; break; }
     }
   }
-  const row = [id, name, Number(category.order) || lastRow, category.active === false ? 'No' : 'Sí'];
+  const row = [id, name, Number(category.order) || lastRow, category.active === false ? 'No' : 'Sí', category.nameEn || ''];
   if (targetRow > 0) sheet.getRange(targetRow, 1, 1, CATEGORY_HEADERS.length).setValues([row]);
   else sheet.appendRow(row);
   return jsonResponse_({ ok: true, category: { id: id, name: name } });
@@ -370,6 +377,9 @@ function handleGuardarDelivery_(body) {
       quoteOnly ? 'Sí' : 'No',
       Math.max(1, Math.floor(Number(zone.order) || lastRow || 1)),
       zone.active === false ? 'No' : 'Sí',
+      String(zone.nameEn || '').trim(),
+      String(zone.coverageEn || '').trim(),
+      String(zone.etaEn || '').trim(),
     ];
 
     if (targetRow > 0) sheet.getRange(targetRow, 1, 1, DELIVERY_HEADERS.length).setValues([row]);
@@ -452,7 +462,12 @@ function prepareDataSheet_(name, headers, seed) {
   if (!sheet) sheet = spreadsheet.insertSheet(name);
   if (sheet.getLastRow() === 0) {
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-    if (seed && seed.length) sheet.getRange(2, 1, seed.length, headers.length).setValues(seed);
+    if (seed && seed.length) {
+      const normalizedSeed = seed.map(function (row) {
+        return headers.map(function (_, index) { return typeof row[index] === 'undefined' ? '' : row[index]; });
+      });
+      sheet.getRange(2, 1, normalizedSeed.length, headers.length).setValues(normalizedSeed);
+    }
     sheet.setFrozenRows(1);
     sheet.autoResizeColumns(1, headers.length);
   } else {
@@ -513,6 +528,9 @@ function readCatalog_(includeInactive) {
         stock: stock,
         offerActive: String(row[9]).trim().toLowerCase() === 'sí' || String(row[9]).trim().toLowerCase() === 'si',
         offerPrice: Number(row[10]) || 0,
+        nameEn: String(row[11] || '').trim(),
+        descEn: String(row[12] || '').trim(),
+        unitEn: String(row[13] || '').trim(),
       };
     });
 }
@@ -530,6 +548,7 @@ function readCategories_(includeInactive) {
       return {
         id: String(row[0]).trim(),
         name: String(row[1]).trim(),
+        nameEn: String(row[4] || '').trim(),
         order: Number(row[2]) || 999,
         active: String(row[3]).trim().toLowerCase() !== 'no',
       };
@@ -566,6 +585,9 @@ function deliveryRowToObject_(row) {
     quoteOnly: isYes_(row[7]),
     order: Math.max(1, Math.floor(Number(row[8]) || 999)),
     active: !isNo_(row[9]),
+    nameEn: String(row[10] || '').trim(),
+    coverageEn: String(row[11] || '').trim(),
+    etaEn: String(row[12] || '').trim(),
   };
 }
 
@@ -581,11 +603,12 @@ function readDeliveryZones_(includeInactive) {
 
 function applyDeliveryRules_(data) {
   const subtotal = Math.max(0, Number(data.subtotal) || 0);
+  const english = data.locale === 'en';
   if (data.method === 'pickup') {
     data.zone = '';
     data.deliveryFee = 0;
-    data.deliveryFeeLabel = 'Gratis';
-    data.methodLabel = 'Pickup en tienda';
+    data.deliveryFeeLabel = english ? 'Free' : 'Gratis';
+    data.methodLabel = english ? 'Store pickup' : 'Pickup en tienda';
     data.total = subtotal;
     return { ok: true };
   }
@@ -593,20 +616,34 @@ function applyDeliveryRules_(data) {
   const requestedZone = String(data.zone || '').trim();
   const zones = readDeliveryZones_(false);
   const zone = zones.find(function (candidate) { return candidate.id === requestedZone; });
-  if (!zone) return { ok: false, error: 'Selecciona una zona de delivery disponible.' };
+  if (!zone) return { ok: false, error: english ? 'Select an available delivery zone.' : 'Selecciona una zona de delivery disponible.' };
+  const fallbackEnglish = deliveryEnglishFallback_(zone.id);
+  const zoneName = english ? (zone.nameEn || fallbackEnglish.name || zone.name) : zone.name;
   if (zone.minimum > 0 && subtotal < zone.minimum) {
-    return { ok: false, error: 'El pedido mínimo para ' + zone.name + ' es ' + fmtRD_(zone.minimum) + '.' };
+    return { ok: false, error: english
+      ? 'The minimum order for ' + zoneName + ' is ' + fmtRD_(zone.minimum) + '.'
+      : 'El pedido mínimo para ' + zoneName + ' es ' + fmtRD_(zone.minimum) + '.' };
   }
   if (zone.requestDate && !String(data.date || '').trim()) {
-    return { ok: false, error: 'Selecciona una fecha para la entrega en ' + zone.name + '.' };
+    return { ok: false, error: english
+      ? 'Select a delivery date for ' + zoneName + '.'
+      : 'Selecciona una fecha para la entrega en ' + zoneName + '.' };
   }
 
-  data.zone = zone.name;
-  data.methodLabel = 'Delivery (' + zone.name + ')';
+  data.zone = zoneName;
+  data.methodLabel = 'Delivery (' + zoneName + ')';
   data.deliveryFee = zone.quoteOnly ? 0 : zone.fee;
-  data.deliveryFeeLabel = zone.quoteOnly ? 'Por cotizar' : fmtRD_(zone.fee);
+  data.deliveryFeeLabel = zone.quoteOnly ? (english ? 'Rate upon request' : 'Por cotizar') : fmtRD_(zone.fee);
   data.total = subtotal + data.deliveryFee;
   return { ok: true };
+}
+
+function deliveryEnglishFallback_(id) {
+  const values = {
+    ciudad: { name: 'Bavaro · Punta Cana' },
+    fuera: { name: 'Outside the city' },
+  };
+  return values[id] || {};
 }
 
 function isYes_(value) {
@@ -655,13 +692,19 @@ function fmtRD_(number) {
   return 'RD$' + Number(number || 0).toLocaleString('es-DO');
 }
 
-function orderSummaryHtml_(orderId, data) {
+function orderSummaryHtml_(orderId, data, locale) {
+  const english = locale === 'en';
   const rows = (data.items || [])
     .map(function (item) {
-      return '<tr><td style="padding:6px 12px;">' + item.qty + '× ' + item.name +
+      const itemName = english ? (item.nameEn || item.name) : (item.nameEs || item.name);
+      return '<tr><td style="padding:6px 12px;">' + item.qty + '× ' + itemName +
         '</td><td style="padding:6px 12px; text-align:right;">' + fmtRD_(item.price * item.qty) + '</td></tr>';
     })
     .join('');
+
+  const payment = english
+    ? ({ transferencia: 'Bank transfer', efectivo: 'Cash', tarjeta: 'Card' }[data.payment] || data.payment || '')
+    : (data.payment || '');
 
   return (
     '<div style="font-family:sans-serif; max-width:520px; margin:auto; border:1px solid #E7D8BB; border-radius:12px; overflow:hidden;">' +
@@ -670,30 +713,35 @@ function orderSummaryHtml_(orderId, data) {
     '<div style="font-size:11px; letter-spacing:2px; color:#A9823C;">BY CHEF MANU ROSSI</div>' +
     '</div>' +
     '<div style="padding:24px; color:#3A2718;">' +
-    '<p style="margin:0 0 6px;">Pedido <strong>' + orderId + '</strong></p>' +
+    '<p style="margin:0 0 6px;">' + (english ? 'Order' : 'Pedido') + ' <strong>' + orderId + '</strong></p>' +
     '<table style="width:100%; border-collapse:collapse; margin:12px 0; background:#FBF5E8; border-radius:8px;">' + rows + '</table>' +
     '<p style="margin:4px 0;">Subtotal: <strong>' + fmtRD_(data.subtotal) + '</strong></p>' +
-    '<p style="margin:4px 0;">Entrega: ' + (data.methodLabel || '') + ' — ' + (data.deliveryFeeLabel || fmtRD_(data.deliveryFee)) + '</p>' +
+    '<p style="margin:4px 0;">' + (english ? 'Delivery' : 'Entrega') + ': ' + (data.methodLabel || '') + ' — ' + (data.deliveryFeeLabel || fmtRD_(data.deliveryFee)) + '</p>' +
     '<p style="margin:4px 0; font-size:18px;">Total: <strong>' + fmtRD_(data.total) + '</strong></p>' +
-    (data.address ? '<p style="margin:4px 0;">Dirección: ' + data.address + '</p>' : '') +
-    (data.date ? '<p style="margin:4px 0;">Fecha: ' + data.date + '</p>' : '') +
-    '<p style="margin:4px 0;">Pago: ' + (data.payment || '') + '</p>' +
-    (data.notes ? '<p style="margin:4px 0;">Notas: ' + data.notes + '</p>' : '') +
+    (data.address ? '<p style="margin:4px 0;">' + (english ? 'Address' : 'Dirección') + ': ' + data.address + '</p>' : '') +
+    (data.date ? '<p style="margin:4px 0;">' + (english ? 'Date' : 'Fecha') + ': ' + data.date + '</p>' : '') +
+    '<p style="margin:4px 0;">' + (english ? 'Payment' : 'Pago') + ': ' + payment + '</p>' +
+    (data.notes ? '<p style="margin:4px 0;">' + (english ? 'Notes' : 'Notas') + ': ' + data.notes + '</p>' : '') +
     '</div></div>'
   );
 }
 
 function sendCustomerConfirmation_(orderId, data) {
   try {
+    const english = data.locale === 'en';
     MailApp.sendEmail({
       to: data.email,
       name: CONFIG.BUSINESS_NAME,
       replyTo: CONFIG.BUSINESS_EMAIL,
-      subject: '¡Pedido recibido! ' + orderId + ' — ' + CONFIG.BUSINESS_NAME,
+      subject: (english ? 'Order received! ' : '¡Pedido recibido! ') + orderId + ' — ' + CONFIG.BUSINESS_NAME,
       htmlBody:
-        '<p style="font-family:sans-serif;">Hola ' + (data.name || '') + ', ¡gracias por tu pedido! 🍮</p>' +
-        orderSummaryHtml_(orderId, data) +
-        '<p style="font-family:sans-serif; color:#8A7458; font-size:13px;">Te contactaremos por WhatsApp para coordinar la entrega. Gracias por apoyar lo artesanal ♥</p>',
+        '<p style="font-family:sans-serif;">' + (english ? 'Hello ' : 'Hola ') + (data.name || '') +
+        (english ? ', thank you for your order! 🍮</p>' : ', ¡gracias por tu pedido! 🍮</p>') +
+        orderSummaryHtml_(orderId, data, english ? 'en' : 'es') +
+        '<p style="font-family:sans-serif; color:#8A7458; font-size:13px;">' +
+        (english
+          ? 'We will contact you via WhatsApp to coordinate delivery. Thank you for supporting handcrafted products ♥'
+          : 'Te contactaremos por WhatsApp para coordinar la entrega. Gracias por apoyar lo artesanal ♥') + '</p>',
     });
   } catch (err) {
     console.error('Error enviando correo al cliente: ' + err);
@@ -712,7 +760,7 @@ function sendBusinessAlert_(orderId, data, itemsText) {
         '<p style="font-family:sans-serif;">Cliente: <strong>' + (data.name || '') + '</strong><br>' +
         'Teléfono: <strong>' + (data.phone || '') + '</strong><br>' +
         (data.email ? 'Email: ' + data.email + '<br>' : '') + '</p>' +
-        orderSummaryHtml_(orderId, data) +
+        orderSummaryHtml_(orderId, data, 'es') +
         '<p style="font-family:sans-serif; font-size:13px; color:#8A7458;">El pedido quedó registrado en la hoja "' + CONFIG.SHEET_NAME + '" con estado <strong>Nuevo</strong>.</p>',
     });
   } catch (err) {

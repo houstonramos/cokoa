@@ -24,14 +24,18 @@ import {
   normalizeHeroSettings,
   slugifyCategory,
 } from './lib/catalog';
+import { getCategoryEnglish, getDeliveryEnglish, getProductEnglish } from './lib/i18n';
 
 const emptyItem = (category = 'Latas') => ({
   id: '',
   category,
   name: '',
   desc: '',
+  nameEn: '',
+  descEn: '',
   price: '',
   unit: '',
+  unitEn: '',
   image: '',
   rawImage: '',
   active: true,
@@ -44,10 +48,13 @@ const emptyDeliveryZone = (order) => ({
   _key: `delivery-${Date.now()}-${order}`,
   id: '',
   name: '',
+  nameEn: '',
   coverage: '',
+  coverageEn: '',
   fee: '',
   minimum: '',
   eta: '',
+  etaEn: '',
   requestDate: false,
   quoteOnly: false,
   order,
@@ -55,11 +62,17 @@ const emptyDeliveryZone = (order) => ({
 });
 
 function normalizeAdminDeliveryZones(values) {
-  return normalizeDeliveryZones(values, true).map((zone, index) => ({
-    ...zone,
-    _key: zone.id || `delivery-${index}`,
-    minimum: zone.minimum || '',
-  }));
+  return normalizeDeliveryZones(values, true).map((zone, index) => {
+    const english = getDeliveryEnglish(zone);
+    return {
+      ...zone,
+      nameEn: zone.nameEn || english.name,
+      coverageEn: zone.coverageEn || english.coverage,
+      etaEn: zone.etaEn || english.eta,
+      _key: zone.id || `delivery-${index}`,
+      minimum: zone.minimum || '',
+    };
+  });
 }
 
 function fmt(n) {
@@ -67,10 +80,14 @@ function fmt(n) {
 }
 
 function normalizeAdminItem(item) {
+  const english = getProductEnglish(item);
   return {
     ...emptyItem(normalizeCategoryName(item.category)),
     ...item,
     category: normalizeCategoryName(item.category),
+    nameEn: item.nameEn || english.name,
+    descEn: item.descEn || english.desc,
+    unitEn: item.unitEn || english.unit,
     stock: item.stock === null || typeof item.stock === 'undefined' ? '' : item.stock,
     offerActive: item.offerActive === true,
     offerPrice: item.offerPrice || '',
@@ -82,6 +99,7 @@ function normalizeCategories(values, items) {
   const categories = source.map((category, index) => ({
     id: slugifyCategory(category.id || category.name || category),
     name: normalizeCategoryName(category.name || category),
+    nameEn: getCategoryEnglish(category),
     order: Number(category.order) || index + 1,
     active: category.active !== false,
   }));
@@ -89,7 +107,7 @@ function normalizeCategories(values, items) {
   items.forEach((item) => {
     const id = slugifyCategory(item.category);
     if (!seen.has(id)) {
-      categories.push({ id, name: item.category, order: categories.length + 1, active: true });
+      categories.push({ id, name: item.category, nameEn: item.category, order: categories.length + 1, active: true });
       seen.add(id);
     }
   });
@@ -108,11 +126,13 @@ export default function AdminApp() {
   const [settings, setSettings] = useState({ ...DEFAULT_HERO_SETTINGS });
   const [deliveryZones, setDeliveryZones] = useState(() => normalizeAdminDeliveryZones(DEFAULT_DELIVERY_ZONES));
   const [newCategory, setNewCategory] = useState('');
+  const [newCategoryEn, setNewCategoryEn] = useState('');
   const [loadError, setLoadError] = useState('');
   const [savingId, setSavingId] = useState(null);
   const [heroUploading, setHeroUploading] = useState(false);
   const [heroSaving, setHeroSaving] = useState(false);
   const [savingDeliveryId, setSavingDeliveryId] = useState(null);
+  const [savingCategoryId, setSavingCategoryId] = useState(null);
   const [toast, setToast] = useState('');
 
   useEffect(() => {
@@ -180,7 +200,7 @@ export default function AdminApp() {
       showToast('Esa categoría ya existe.');
       return;
     }
-    const category = { id: slugifyCategory(name), name, order: categories.length + 1, active: true };
+    const category = { id: slugifyCategory(name), name, nameEn: newCategoryEn.trim(), order: categories.length + 1, active: true };
     const res = await saveCategory(pin, category);
     if (!res.ok) {
       showToast('No se pudo crear la categoría: ' + (res.error || 'intenta de nuevo'));
@@ -188,7 +208,19 @@ export default function AdminApp() {
     }
     setCategories((previous) => [...previous, category]);
     setNewCategory('');
+    setNewCategoryEn('');
     showToast('Categoría agregada.');
+  };
+
+  const updateCategory = (index, patch) => setCategories((previous) => previous
+    .map((category, categoryIndex) => (categoryIndex === index ? { ...category, ...patch } : category)));
+
+  const saveCategoryTranslation = async (index) => {
+    const category = categories[index];
+    setSavingCategoryId(category.id);
+    const res = await saveCategory(pin, category);
+    setSavingCategoryId(null);
+    showToast(res.ok ? 'Traducción de categoría guardada.' : 'No se pudo guardar: ' + (res.error || 'intenta de nuevo'));
   };
 
   const remove = async (index) => {
@@ -477,6 +509,15 @@ export default function AdminApp() {
                   />
                 </label>
 
+                <label className="admin-delivery-field admin-delivery-name admin-translation-field">
+                  <span>Nombre en inglés</span>
+                  <input
+                    value={zone.nameEn}
+                    onChange={(event) => updateDeliveryZone(index, { nameEn: event.target.value })}
+                    placeholder="Example: Cap Cana"
+                  />
+                </label>
+
                 <label className="admin-delivery-field">
                   <span>Sectores o cobertura</span>
                   <textarea
@@ -484,6 +525,16 @@ export default function AdminApp() {
                     value={zone.coverage}
                     onChange={(event) => updateDeliveryZone(index, { coverage: event.target.value })}
                     placeholder="Describe los sectores incluidos"
+                  />
+                </label>
+
+                <label className="admin-delivery-field admin-translation-field">
+                  <span>Cobertura en inglés</span>
+                  <textarea
+                    rows={2}
+                    value={zone.coverageEn}
+                    onChange={(event) => updateDeliveryZone(index, { coverageEn: event.target.value })}
+                    placeholder="Describe the areas included"
                   />
                 </label>
 
@@ -520,6 +571,16 @@ export default function AdminApp() {
                       placeholder="Ej. Mismo día"
                     />
                   </label>
+                  <label className="admin-delivery-field admin-translation-field">
+                    <span>Tiempo en inglés</span>
+                    <input
+                      value={zone.etaEn}
+                      onChange={(event) => updateDeliveryZone(index, { etaEn: event.target.value })}
+                      placeholder="Example: Same day"
+                    />
+                  </label>
+                </div>
+                <div className="admin-delivery-row">
                   <label className="admin-delivery-field admin-delivery-order">
                     <span>Orden</span>
                     <input
@@ -573,14 +634,31 @@ export default function AdminApp() {
             <p>Las categorías con productos visibles aparecerán automáticamente en el menú del sitio.</p>
           </div>
           <div className="admin-category-controls">
-            <div className="admin-category-chips">
-              {categories.map((category) => <span key={category.id}>{category.name}</span>)}
+            <div className="admin-category-list">
+              {categories.map((category, index) => (
+                <div className="admin-category-translation" key={category.id}>
+                  <span>{category.name}</span>
+                  <input
+                    value={category.nameEn}
+                    onChange={(event) => updateCategory(index, { nameEn: event.target.value })}
+                    placeholder="Nombre en inglés"
+                  />
+                  <button type="button" onClick={() => saveCategoryTranslation(index)} disabled={savingCategoryId === category.id}>
+                    {savingCategoryId === category.id ? '…' : 'Guardar'}
+                  </button>
+                </div>
+              ))}
             </div>
             <form className="admin-category-form" onSubmit={addCategory}>
               <input
                 value={newCategory}
                 onChange={(event) => setNewCategory(event.target.value)}
                 placeholder="Nueva categoría"
+              />
+              <input
+                value={newCategoryEn}
+                onChange={(event) => setNewCategoryEn(event.target.value)}
+                placeholder="Categoría en inglés"
               />
               <button type="submit" className="btn-outline-small">Agregar</button>
             </form>
@@ -654,6 +732,21 @@ export default function AdminApp() {
                     value={item.desc}
                     onChange={(event) => updateItem(index, { desc: event.target.value })}
                   />
+                  <div className="admin-translation-block">
+                    <span className="admin-translation-label">Versión en inglés</span>
+                    <input
+                      className="admin-input-name"
+                      placeholder="Product name"
+                      value={item.nameEn}
+                      onChange={(event) => updateItem(index, { nameEn: event.target.value })}
+                    />
+                    <textarea
+                      placeholder="Product description"
+                      rows={2}
+                      value={item.descEn}
+                      onChange={(event) => updateItem(index, { descEn: event.target.value })}
+                    />
+                  </div>
                   <div className="admin-row-2">
                     <div>
                       <label>Precio regular (RD$)</label>
@@ -662,6 +755,12 @@ export default function AdminApp() {
                     <div>
                       <label>Unidad o tamaño</label>
                       <input list="cokoa-units" value={item.unit} onChange={(event) => updateItem(index, { unit: event.target.value })} placeholder="Ej. lata 250ml" />
+                    </div>
+                  </div>
+                  <div className="admin-row-2 admin-translation-row">
+                    <div>
+                      <label>Unidad o tamaño en inglés</label>
+                      <input value={item.unitEn} onChange={(event) => updateItem(index, { unitEn: event.target.value })} placeholder="Example: 250 ml can" />
                     </div>
                   </div>
                   <div className="admin-commerce-row">

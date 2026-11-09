@@ -3,7 +3,9 @@
 Sitio web de pedidos: landing + catálogo + carrito + checkout, con backend de pedidos en Google Sheets, correos automáticos y continuación por WhatsApp.
 
 La tienda pública es bilingüe: español en `/` e inglés en `/en`. El selector `ES | EN`
-mantiene separados los enlaces de cada idioma sin añadir una librería de routing.
+mantiene separados los enlaces de cada idioma sin añadir una librería de routing. En la
+primera visita se usa el idioma preferido del navegador; después se recuerda la selección
+manual del cliente. No se utiliza la IP ni se recopila la ubicación para elegir el idioma.
 
 **Stack:** Vite + React (frontend) · Google Apps Script + Google Sheets (backend) · WhatsApp (wa.me) para seguimiento.
 

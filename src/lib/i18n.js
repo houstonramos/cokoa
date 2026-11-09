@@ -1,4 +1,5 @@
 export const SUPPORTED_LOCALES = ['es', 'en'];
+const LOCALE_STORAGE_KEY = 'cokoa_preferred_locale';
 
 const PRODUCT_ENGLISH = {
   baileys: {
@@ -234,6 +235,27 @@ const DELIVERY_ENGLISH = {
 
 export function localeFromPath(pathname = window.location.pathname) {
   return pathname.replace(/\/+$/, '') === '/en' ? 'en' : 'es';
+}
+
+export function getSavedLocale() {
+  try {
+    const locale = localStorage.getItem(LOCALE_STORAGE_KEY);
+    return SUPPORTED_LOCALES.includes(locale) ? locale : '';
+  } catch {
+    return '';
+  }
+}
+
+export function detectBrowserLocale() {
+  const languages = Array.isArray(navigator.languages) && navigator.languages.length
+    ? navigator.languages
+    : [navigator.language || 'es'];
+  return languages.some((language) => String(language).toLowerCase().startsWith('es')) ? 'es' : 'en';
+}
+
+export function rememberLocale(locale) {
+  if (!SUPPORTED_LOCALES.includes(locale)) return;
+  try { localStorage.setItem(LOCALE_STORAGE_KEY, locale); } catch { /* El selector sigue funcionando sin almacenamiento. */ }
 }
 
 export function getProductEnglish(item) {

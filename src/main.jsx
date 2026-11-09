@@ -2,15 +2,21 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import AdminApp from './AdminApp';
-import { localeFromPath } from './lib/i18n';
+import { detectBrowserLocale, getSavedLocale, localeFromPath, rememberLocale } from './lib/i18n';
 import './index.css';
 
 // Enrutamiento mínimo sin librerías: /admin es el panel y /en es la tienda en inglés.
 const normalizedPath = window.location.pathname.replace(/\/+$/, '');
 const isAdmin = normalizedPath === '/admin';
 const locale = localeFromPath();
+const isSpanishHome = !normalizedPath;
+const savedLocale = getSavedLocale();
+const preferredLocale = savedLocale || detectBrowserLocale();
+const shouldOpenEnglish = !isAdmin && isSpanishHome && preferredLocale === 'en';
 
-if (!isAdmin) {
+if (shouldOpenEnglish) {
+  window.location.replace(`/en${window.location.hash || ''}`);
+} else if (!isAdmin) {
   const english = locale === 'en';
   const title = english
     ? 'Cokoa by Chef Manu Rossi | Desserts, drinks and cacao'
@@ -30,10 +36,13 @@ if (!isAdmin) {
   document.querySelector('meta[property="og:url"]')?.setAttribute('content', canonical);
   document.querySelector('meta[name="twitter:title"]')?.setAttribute('content', title);
   document.querySelector('meta[name="twitter:description"]')?.setAttribute('content', description);
+  rememberLocale(locale);
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    {isAdmin ? <AdminApp /> : <App locale={locale} />}
-  </React.StrictMode>
-);
+if (!shouldOpenEnglish) {
+  ReactDOM.createRoot(document.getElementById('root')).render(
+    <React.StrictMode>
+      {isAdmin ? <AdminApp /> : <App locale={locale} />}
+    </React.StrictMode>
+  );
+}

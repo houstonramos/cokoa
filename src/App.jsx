@@ -15,6 +15,7 @@ import {
   localizeCategory,
   localizeDeliveryZone,
   localizeItem,
+  rememberLocale,
 } from './lib/i18n';
 import CartDrawer from './components/CartDrawer';
 
@@ -187,9 +188,9 @@ export default function App({ locale = 'es' }) {
             <a href="#contacto">{copy.contact}</a>
           </div>
           <div className="language-switch" aria-label={locale === 'en' ? 'Language' : 'Idioma'}>
-            <a href="/" className={locale === 'es' ? 'active' : ''} lang="es" aria-current={locale === 'es' ? 'page' : undefined}>ES</a>
+            <a href="/" onClick={() => rememberLocale('es')} className={locale === 'es' ? 'active' : ''} lang="es" aria-current={locale === 'es' ? 'page' : undefined}>ES</a>
             <span>/</span>
-            <a href="/en" className={locale === 'en' ? 'active' : ''} lang="en" aria-current={locale === 'en' ? 'page' : undefined}>EN</a>
+            <a href="/en" onClick={() => rememberLocale('en')} className={locale === 'en' ? 'active' : ''} lang="en" aria-current={locale === 'en' ? 'page' : undefined}>EN</a>
           </div>
           <button
             className={`btn-cart${cartNotice?.status === 'added' ? ' is-updated' : ''}`}
